@@ -115,7 +115,7 @@ async function run(): Promise<void> {
         overrides: { cFlags: '-O2' }
     });
     assert(result.success === true, 'service: successful build');
-    assert(result.buildId.length === 64, 'service: build id');
+    assert(result.configHash.length === 64, 'service: config hash');
     assert(result.stage === 'link', 'service: stage');
     assert(result.problems.length === 1 && result.problems[0].severity === 'warning',
         'service: parses warning');

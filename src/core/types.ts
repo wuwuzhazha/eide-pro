@@ -42,6 +42,7 @@ export interface EffectiveBuildConfig {
 export interface BuildResult {
     success: boolean;
     buildId?: string;
+    configHash?: string;
     stage: BuildStage;
     problems: BuildProblem[];
     memory: { [region: string]: MemoryRegionUsage };

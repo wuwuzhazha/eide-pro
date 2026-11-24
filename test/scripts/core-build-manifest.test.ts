@@ -3,7 +3,7 @@ const os = require('os');
 const NodePath = require('path');
 const {
     stableStringify,
-    createBuildId,
+    createConfigHash,
     writeBuildManifest,
     collectArtifacts
 } = require('../../../src/core/build_manifest') as any;
@@ -26,15 +26,15 @@ const request = {
     overrides: { defines: ['A=1'] }
 };
 const params = { defines: ['BASE'], sourceList: ['src/main.c'] };
-const id1 = createBuildId(params, request);
-const id2 = createBuildId(params, request);
-assert(id1 === id2 && id1.length === 64, 'manifest: build id is deterministic sha256');
+const id1 = createConfigHash(params, request);
+const id2 = createConfigHash(params, request);
+assert(id1 === id2 && id1.length === 64, 'manifest: config hash is deterministic sha256');
 
-const changed = createBuildId(params, {
+const changed = createConfigHash(params, {
     ...request,
     overrides: { defines: ['A=2'] }
 });
-assert(changed !== id1, 'manifest: build id changes with overrides');
+assert(changed !== id1, 'manifest: config hash changes with overrides');
 
 const baseDir = NodePath.join(os.tmpdir(), `eide-manifest-${process.pid}-${Date.now()}`);
 try {
@@ -49,6 +49,7 @@ try {
 
     const manifestPath = writeBuildManifest(baseDir, {
         buildId: id1,
+        configHash: id1,
         createdAt: new Date(0).toISOString(),
         request,
         target: 'Debug',
@@ -61,6 +62,7 @@ try {
     });
     const written = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     assert(written.buildId === id1, 'manifest: writes build id');
+    assert(written.configHash === id1, 'manifest: writes config hash');
     assert(written.artifacts.length === 4, 'manifest: writes artifacts');
 } finally {
     fs.rmSync(baseDir, { recursive: true, force: true });

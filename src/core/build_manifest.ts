@@ -5,6 +5,7 @@ import type { BuildRequest } from './types';
 
 export interface BuildManifest {
     buildId: string;
+    configHash: string;
     createdAt: string;
     request: BuildRequest;
     target: string;
@@ -35,7 +36,7 @@ export function stableStringify(value: unknown): string {
     return JSON.stringify(normalize(value));
 }
 
-export function createBuildId(params: unknown, request: BuildRequest): string {
+export function createConfigHash(params: unknown, request: BuildRequest): string {
     return createHash('sha256')
         .update(stableStringify({ params, request }))
         .digest('hex');

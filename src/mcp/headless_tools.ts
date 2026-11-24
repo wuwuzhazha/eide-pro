@@ -175,7 +175,7 @@ class HeadlessToolRunner {
                     return makeJsonResult({
                         success: true,
                         dryRun: true,
-                        buildId: plan.buildId,
+                        configHash: plan.configHash,
                         outDir: plan.outDir,
                         builder: plan.file,
                         args: plan.args,

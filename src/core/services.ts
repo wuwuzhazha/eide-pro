@@ -25,7 +25,7 @@ export interface BuildPlan {
     file: string;
     args: string[];
     outDir: string;
-    buildId: string;
+    configHash: string;
 }
 
 export interface CleanResult {

@@ -16,7 +16,7 @@ export interface CliIo {
     stderr(text: string): void;
 }
 
-const processIo: CliIo = {
+export const processIo: CliIo = {
     stdout: text => process.stdout.write(text),
     stderr: text => process.stderr.write(text)
 };
@@ -36,15 +36,19 @@ function toRequest(options: CliOptions): BuildRequest {
     };
 }
 
-function writeJson(io: CliIo, value: unknown): void {
+export function writeJson(io: CliIo, value: unknown): void {
     io.stdout(JSON.stringify(value) + '\n');
 }
 
-function errorPayload(command: string, error: Error): unknown {
+export function errorPayload(
+    command: string | null,
+    error: Error,
+    kind: 'usage' | 'config' | 'internal'
+): unknown {
     return {
         success: false,
         command,
-        error: { name: error.name, message: error.message }
+        error: { name: error.name, message: error.message, kind }
     };
 }
 
@@ -129,7 +133,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
             writeJson(io, {
                 success: true,
                 command: 'plan',
-                buildId: plan.buildId,
+                    configHash: plan.configHash,
                 outDir: plan.outDir,
                 builder: plan.file,
                 args: plan.args,
@@ -147,10 +151,12 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
         io.stderr(`error: ${err.message}\n`);
         if (err instanceof CliUsageError) {
             io.stderr(cliHelp + '\n');
+            writeJson(io, errorPayload(command || null, err, 'usage'));
             return 3;
         }
-        writeJson(io, errorPayload(command, err));
-        return err instanceof BuildExecutionError ? 4 : 3;
+        const kind = err instanceof BuildExecutionError ? 'internal' : 'config';
+        writeJson(io, errorPayload(command || null, err, kind));
+        return kind === 'internal' ? 4 : 3;
     }
 }
 
@@ -158,8 +164,9 @@ if (require.main === module) {
     main(process.argv.slice(2)).then(
         code => { process.exitCode = code; },
         error => {
-            process.stderr.write(`${error instanceof Error ? error.message : String(error)}
-`);
+            const err = error instanceof Error ? error : new Error(String(error));
+            process.stderr.write(`${err.message}\n`);
+            writeJson(processIo, errorPayload(null, err, 'internal'));
             process.exitCode = 4;
         }
     );

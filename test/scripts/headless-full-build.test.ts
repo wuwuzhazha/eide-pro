@@ -3,6 +3,7 @@ const os = require('os');
 const NodePath = require('path');
 const yaml = require('yaml');
 const { EideBuildService } = require('../../../src/headless/build_service') as any;
+const { createConfigHash } = require('../../../src/core/build_manifest') as any;
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {
@@ -194,6 +195,51 @@ async function run(): Promise<void> {
     });
     const explicitThreads = await threaded.plan({ projectPath: root, target: 'Debug' });
     assert(explicitThreads.params.threadNum === 3, 'full build: explicit thread count');
+
+    let buildCalls = 0;
+    const buildRunner = {
+        run: async () => {
+            const outDir = NodePath.join(root, 'build', 'Debug');
+            fs.mkdirSync(outDir, { recursive: true });
+            fs.writeFileSync(NodePath.join(outDir, 'demo.elf'), 'firmware');
+            fs.writeFileSync(NodePath.join(outDir, 'compile_commands.json'), '[]');
+            buildCalls++;
+            if (buildCalls === 1) {
+                return { code: 0, stdout: '', stderr: '' };
+            }
+            fs.writeFileSync(NodePath.join(outDir, 'compiler.log'),
+                'src/main.c:1:1: error: expected expression');
+            return { code: 1, stdout: '', stderr: '' };
+        }
+    };
+    const buildService = new EideBuildService({
+        resourcesDir: resources,
+        toolchainPath: toolchain,
+        settingsFile,
+        runner: buildRunner,
+        timeoutMs: 5000
+    });
+    const firstBuild = await buildService.build({ projectPath: root, target: 'Debug' });
+    assert(firstBuild.success === true, 'full build: first build succeeds');
+    assert(firstBuild.artifacts.length === 1, 'full build: first build reports artifact');
+
+    const secondBuild = await buildService.build({ projectPath: root, target: 'Debug' });
+    assert(secondBuild.success === false, 'full build: failed build fails');
+    assert(Array.isArray(secondBuild.artifacts) && secondBuild.artifacts.length === 0,
+        'full build: failed build drops stale artifacts');
+    assert(secondBuild.buildId !== firstBuild.buildId, 'full build: build id is unique per build');
+    assert(firstBuild.configHash.length === 64 && secondBuild.configHash.length === 64,
+        'full build: config hash is sha256');
+    assert(createConfigHash({}, { projectPath: root, target: 'Debug' })
+        === createConfigHash({}, { projectPath: root, target: 'Debug' }),
+        'full build: config hash remains stable');
+
+    const manifest = JSON.parse(fs.readFileSync(
+        NodePath.join(root, 'build', 'Debug', 'build-manifest.json'), 'utf8'));
+    assert(Array.isArray(manifest.artifacts) && manifest.artifacts.length === 0,
+        'full build: failed manifest drops stale artifacts');
+    assert(manifest.buildId === secondBuild.buildId, 'full build: manifest writes per-build id');
+    assert(manifest.configHash === secondBuild.configHash, 'full build: manifest writes config hash');
 }
 
 run()

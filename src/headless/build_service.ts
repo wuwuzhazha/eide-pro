@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as NodePath from 'path';
+import { randomUUID } from 'node:crypto';
 import type { AbstractProject } from '../EIDEProject';
 import type { BuilderOptions } from '../EIDETypeDefine';
 import type { BuildOptions } from '../CodeBuilder';
 import { Logger, ProcessResult, ProcessRunner } from '../core/adapters';
 import { BuildProblem, parseToolchainProblems } from '../core/problems';
 import { BuildExecutionError } from '../core/build_service';
-import { collectArtifacts, createBuildId, writeBuildManifest } from '../core/build_manifest';
+import { collectArtifacts, createConfigHash, writeBuildManifest } from '../core/build_manifest';
 import { ProcessTimeoutError } from '../core/process_runner';
 import { BuildPlan, BuildService, CleanResult } from '../core/services';
 import { BuildRequest, BuildResult, EffectiveBuildConfig } from '../core/types';
@@ -122,7 +123,7 @@ export class EideBuildService implements BuildService {
                 file: invocation.file,
                 args: invocation.args,
                 outDir: session.project.getOutputFolder().path,
-                buildId: createBuildId(params, request)
+                configHash: createConfigHash(params, request)
             };
         } finally {
             session.close();
@@ -136,7 +137,8 @@ export class EideBuildService implements BuildService {
             project.Save(true);
             const invocation = this.invocation(project, request);
             const params = JSON.parse(fs.readFileSync(invocation.paramsPath, 'utf8'));
-            const buildId = createBuildId(params, request);
+            const buildId = randomUUID();
+            const configHash = createConfigHash(params, request);
             const outDir = project.getOutputFolder().path;
             const compilerLogPath = NodePath.join(outDir, 'compiler.log');
             fs.rmSync(compilerLogPath, { force: true });
@@ -182,7 +184,7 @@ export class EideBuildService implements BuildService {
                 analysisError = 'Builder process terminated by a signal.';
             }
             const stage = detectBuildStage(logText, success);
-            const artifacts = collectArtifacts(outDir);
+            const artifacts = success ? collectArtifacts(outDir) : [];
             const compileCommandsPath = NodePath.join(outDir, 'compile_commands.json');
             const compileCommands = fs.existsSync(compileCommandsPath)
                 ? compileCommandsPath
@@ -190,6 +192,7 @@ export class EideBuildService implements BuildService {
 
             writeBuildManifest(outDir, {
                 buildId,
+                configHash,
                 createdAt: new Date().toISOString(),
                 request,
                 target: String(params.target ?? ''),
@@ -205,6 +208,7 @@ export class EideBuildService implements BuildService {
             return {
                 success,
                 buildId,
+                configHash,
                 stage,
                 problems,
                 memory: parseMemoryUsage(logText),
