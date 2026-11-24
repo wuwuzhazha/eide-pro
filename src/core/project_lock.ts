@@ -31,36 +31,63 @@ function createLockFile(fpath: string): number {
     return fs.openSync(fpath, 'r');
 }
 
-export function acquireProjectLock(fpath: string): number | undefined {
-
-    let fd: number;
+function tryAcquire(fpath: string): number | undefined {
 
     try {
-        fd = createLockFile(fpath);
+        return createLockFile(fpath);
     } catch (error) {
         if ((<NodeJS.ErrnoException>error).code !== 'EEXIST') {
             throw error;
         }
-        const holder = readHolderPid(fpath);
-        if (holder !== undefined && isProcessAlive(holder)) {
+    }
+
+    const holder = readHolderPid(fpath);
+    if (holder !== undefined && isProcessAlive(holder)) {
+        return undefined;
+    }
+
+    const reclaimPath = `${fpath}.reclaim.${process.pid}`;
+    try {
+        fs.renameSync(fpath, reclaimPath);
+    } catch (renameError) {
+        if ((<NodeJS.ErrnoException>renameError).code === 'ENOENT') {
             return undefined;
         }
-        const reclaimPath = `${fpath}.reclaim.${process.pid}`;
+        throw renameError;
+    }
+
+    const reclaimed = readHolderPid(reclaimPath);
+    if (reclaimed !== undefined && isProcessAlive(reclaimed)) {
         try {
-            fs.renameSync(fpath, reclaimPath);
-        } catch (renameError) {
-            if ((<NodeJS.ErrnoException>renameError).code === 'ENOENT') {
-                return undefined;
+            fs.linkSync(reclaimPath, fpath);
+        } catch (linkError) {
+            if ((<NodeJS.ErrnoException>linkError).code !== 'EEXIST') {
+                throw linkError;
             }
-            throw renameError;
+        } finally {
+            fs.rmSync(reclaimPath, { force: true });
         }
-        const reclaimed = readHolderPid(reclaimPath);
-        if (reclaimed !== undefined && isProcessAlive(reclaimed)) {
-            fs.renameSync(reclaimPath, fpath);
+        return undefined;
+    }
+
+    fs.unlinkSync(reclaimPath);
+
+    try {
+        return createLockFile(fpath);
+    } catch (retryError) {
+        if ((<NodeJS.ErrnoException>retryError).code === 'EEXIST') {
             return undefined;
         }
-        fs.unlinkSync(reclaimPath);
-        fd = createLockFile(fpath);
+        throw retryError;
+    }
+}
+
+export function acquireProjectLock(fpath: string): number | undefined {
+
+    const fd = tryAcquire(fpath);
+
+    if (fd === undefined) {
+        return undefined;
     }
 
     lockedFiles.set(fd, fpath);

@@ -140,6 +140,57 @@ async function run(): Promise<void> {
         assert(fs.readFileSync(path, 'utf8') === '999999',
             'lock: leaves the lock file untouched when the reclaim rename loses');
     }
+
+    {
+        const path = lockPath('retry-raced');
+        fs.writeFileSync(path, '999999');
+        const originalLink = fs.linkSync;
+        let linkCalls = 0;
+        fs.linkSync = (existingPath: string, newPath: string) => {
+            linkCalls++;
+            if (linkCalls === 2) {
+                const error: NodeJS.ErrnoException = new Error('EEXIST: retry raced');
+                error.code = 'EEXIST';
+                throw error;
+            }
+            return originalLink(existingPath, newPath);
+        };
+        let result: number | undefined | string = 'threw';
+        try {
+            result = ProjectLock.acquireProjectLock(path);
+        } catch (error) {
+            result = 'threw';
+        }
+        fs.linkSync = originalLink;
+        assert(result === undefined,
+            'lock: returns undefined when the retry loses to another process');
+        assert(fs.readdirSync(root).every((name: string) => !name.includes('.reclaim.') && !name.endsWith('.tmp')),
+            'lock: leaves no reclaim or temporary file behind after a lost retry');
+    }
+
+    {
+        const path = lockPath('restore-taken');
+        fs.writeFileSync(path, '999999');
+        const originalRename = fs.renameSync;
+        fs.renameSync = (from: string, to: string) => {
+            originalRename(from, to);
+            fs.writeFileSync(to, String(process.pid));
+            fs.writeFileSync(from, 'newer-lock');
+        };
+        let result: number | undefined | string = 'threw';
+        try {
+            result = ProjectLock.acquireProjectLock(path);
+        } catch (error) {
+            result = 'threw';
+        }
+        fs.renameSync = originalRename;
+        assert(result === undefined,
+            'lock: returns undefined when the restore target is already taken');
+        assert(fs.readFileSync(path, 'utf8') === 'newer-lock',
+            'lock: does not overwrite the newer lock on restore');
+        assert(fs.readdirSync(root).every((name: string) => !name.includes('.reclaim.')),
+            'lock: leaves no reclaim file behind after a lost restore');
+    }
 }
 
 run()
