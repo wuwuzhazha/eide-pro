@@ -49,6 +49,17 @@ export function errorPayload(
     };
 }
 
+function exitCodeFor(result: unknown): number {
+    const value = result as { success?: boolean; error?: { kind?: string } };
+    if (value.success === true) {
+        return 0;
+    }
+    if (value.error) {
+        return value.error.kind === 'usage' || value.error.kind === 'config' ? 3 : 4;
+    }
+    return value.success === false ? 2 : 3;
+}
+
 export async function main(argv: string[], io: CliIo = processIo): Promise<number> {
     let command = '';
     try {
@@ -84,11 +95,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
                 target: options.target
             });
             writeJson(io, result);
-            if (result.success) {
-                return 0;
-            }
-            return result.error.kind === 'usage' ? 3
-                : result.error.kind === 'tool' ? 4 : 3;
+            return exitCodeFor(result);
         }
 
         if (command === 'flash') {
@@ -106,19 +113,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
                 dryRun: options.dryRun
             });
             writeJson(io, result);
-            if (result.success) {
-                return 0;
-            }
-            if (result.error.kind === 'usage') {
-                return 3;
-            }
-            if (result.error.kind === 'config') {
-                return 3;
-            }
-            if (result.error.kind === 'tool') {
-                return 4;
-            }
-            return 2;
+            return exitCodeFor(result);
         }
 
         const service = new EideBuildService({
@@ -145,12 +140,12 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
                 paramsFile: plan.paramsPath,
                 params: plan.params
             });
-            return 0;
+            return exitCodeFor({ success: true });
         }
 
         const result = await service.build(request);
         writeJson(io, { command, ...result });
-        return result.success ? 0 : 2;
+        return exitCodeFor(result);
     } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         io.stderr(`error: ${err.message}\n`);
@@ -161,7 +156,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
         }
         const failure = classifyError(err, command || null);
         writeJson(io, failure);
-        return failure.error.kind === 'tool' || failure.error.kind === 'internal' ? 4 : 3;
+        return exitCodeFor(failure);
     }
 }
 

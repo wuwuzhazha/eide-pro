@@ -116,7 +116,9 @@ async function run(): Promise<void> {
 
     text = io();
     code = await main(['build', '--project', root], text);
-    assert(code === 4 && text.err().includes('--resources'),
+    const missingEnvironment = JSON.parse(text.out());
+    assert(code === 4 && missingEnvironment.error.kind === 'internal'
+        && text.err().includes('--resources'),
         'cli: missing environment is an internal error');
 
     text = io();
@@ -148,6 +150,18 @@ async function run(): Promise<void> {
         'cli: flash args');
     assert(flash.programs[0].path.endsWith('demo.hex'), 'cli: flash default artifact');
     assert(flash.invocation.script.contents.includes('loadfile'), 'cli: flash script');
+
+    const noDeviceRoot = NodePath.join(root, 'no-device');
+    const noDeviceConfig = projectConfig('ARM', 'GCC');
+    noDeviceConfig.targets.Debug.uploadConfigMap.JLink.cpuInfo = {};
+    write(NodePath.join(noDeviceRoot, 'src', 'main.c'), 'int main(void) { return 0; }');
+    write(NodePath.join(noDeviceRoot, '.eide', 'eide.yml'), yaml.stringify(noDeviceConfig));
+    text = io();
+    code = await main(['flash', '--project', noDeviceRoot, '--target', 'Debug',
+        '--flasher-exe', 'C:/fake/JLink.exe', '--dry-run'], text);
+    const noDevice = JSON.parse(text.out());
+    assert(code === 3 && noDevice.error.kind === 'config',
+        'cli: missing flash device is a config error');
 
     const outDir = NodePath.join(root, 'build', 'Debug');
     write(NodePath.join(outDir, 'old.elf'), 'elf');

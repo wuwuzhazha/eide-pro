@@ -4,6 +4,7 @@ import * as NodePath from 'path';
 import { createProjectEnvironment, resolveEnvironmentVariables } from '../project_env';
 import { ProjectSnapshot } from '../project_snapshot';
 import { buildFlashCommand } from './builders';
+import { ConfigError } from '../errors';
 import {
     FlashCommand,
     FlashProgram,
@@ -64,7 +65,7 @@ function splitCommandLine(input: string): string[] {
         started = true;
     }
     if (quote !== undefined) {
-        throw new Error(`Unterminated quote in command line: ${input}`);
+        throw new ConfigError(`Unterminated quote in command line: ${input}`);
     }
     if (started) {
         args.push(current);
@@ -76,7 +77,7 @@ function resolveProjectPath(snapshot: ProjectSnapshot, value: string): string {
     const environment = createProjectEnvironment(snapshot, NodePath.join(snapshot.outDir, snapshot.target));
     const resolved = resolveEnvironmentVariables(value, environment);
     if (/\$\{[^}]+\}/.test(resolved)) {
-        throw new Error(`Unresolved environment variable in flash path: ${value}`);
+        throw new ConfigError(`Unresolved environment variable in flash path: ${value}`);
     }
     return NodePath.isAbsolute(resolved)
         ? NodePath.resolve(resolved)
@@ -97,7 +98,7 @@ function parsePrograms(snapshot: ProjectSnapshot, raw: string): FlashProgram[] {
         }
         const match = /^(.*?)(?:,(0x[0-9a-f]+))?$/i.exec(item.trim());
         if (!match || match[1].trim().length === 0) {
-            throw new Error(`Invalid flash program entry: ${item}`);
+            throw new ConfigError(`Invalid flash program entry: ${item}`);
         }
         programs.push({ path: match[1].trim(), address: match[2] });
     }
@@ -136,7 +137,7 @@ function executableFor(
     if (uploader === 'probe-rs') {
         return 'cargo-flash';
     }
-    throw new Error(`--flasher-exe is required for uploader '${uploader}'.`);
+    throw new ConfigError(`--flasher-exe is required for uploader '${uploader}'.`);
 }
 
 function jlinkInterface(value: unknown): JLinkInterface {
@@ -161,7 +162,7 @@ function jlinkInterface(value: unknown): JLinkInterface {
         case 'cJTAG':
             return 'cJTAG';
         default:
-            throw new Error(`Invalid JLink interface: ${String(value)}`);
+            throw new ConfigError(`Invalid JLink interface: ${String(value)}`);
     }
 }
 
@@ -172,7 +173,7 @@ function stlinkProtocol(value: unknown): STLinkProtocol {
     if (value === 'JTAG') {
         return 'JTAG';
     }
-    throw new Error(`Invalid STLink protocol: ${String(value)}`);
+    throw new ConfigError(`Invalid STLink protocol: ${String(value)}`);
 }
 
 function probeProtocol(value: unknown): ProbeRSProtocol {
@@ -182,7 +183,7 @@ function probeProtocol(value: unknown): ProbeRSProtocol {
     if (value === 'jtag') {
         return 'jtag';
     }
-    throw new Error(`Invalid probe-rs protocol: ${String(value)}`);
+    throw new ConfigError(`Invalid probe-rs protocol: ${String(value)}`);
 }
 
 function parseInteger(value: unknown): number | undefined {
@@ -241,7 +242,7 @@ function buildRequest(
         case 'JLink': {
             const device = String(config.cpuInfo?.cpuName || '');
             if (device.length === 0 || device === 'null') {
-                throw new Error('JLink device is not configured (cpuInfo.cpuName).');
+                throw new ConfigError('JLink device is not configured (cpuInfo.cpuName).');
             }
             return {
                 ...base,
@@ -317,7 +318,7 @@ function buildRequest(
                 }
             };
         default:
-            throw new Error(`'${uploader}' is not supported by the headless flash layer.`);
+            throw new ConfigError(`'${uploader}' is not supported by the headless flash layer.`);
     }
 }
 
@@ -325,7 +326,7 @@ export function createFlashPlan(
     snapshot: ProjectSnapshot, environment: FlashEnvironment): FlashPlan {
     const uploader = snapshot.uploader as FlashUploaderName;
     if (!uploader) {
-        throw new Error('Project target has no uploader configured.');
+        throw new ConfigError('Project target has no uploader configured.');
     }
     const executable = executableFor(uploader, environment);
     const request = buildRequest(
