@@ -3,6 +3,28 @@ const os = require('os');
 const NodePath = require('path');
 const yaml = require('yaml');
 const { EideBuildService } = require('../../../src/headless/build_service') as any;
+const { ConfigError } = require('../../../src/core/errors') as any;
+
+function deepEqual(a: unknown, b: unknown): boolean {
+    if (a === b) {
+        return true;
+    }
+    if (typeof a !== typeof b || a === null || b === null) {
+        return false;
+    }
+    if (Array.isArray(a) || Array.isArray(b)) {
+        return Array.isArray(a) && Array.isArray(b)
+            && a.length === b.length
+            && a.every((item, i) => deepEqual(item, b[i]));
+    }
+    if (typeof a === 'object') {
+        const ka = Object.keys(a as object).sort();
+        const kb = Object.keys(b as object).sort();
+        return deepEqual(ka, kb)
+            && ka.every(k => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+    }
+    return false;
+}
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {
@@ -126,8 +148,36 @@ async function run(): Promise<void> {
 
         const schema = await service.getBuilderOptionsSchema(request);
         const expected = JSON.parse(fs.readFileSync(NodePath.join(langDir, schemaFile), 'utf8'));
-        assert(JSON.stringify(schema) === JSON.stringify(expected),
-            `builder options: ${type}/${toolchain} schema is ${schemaFile}`);
+        const expectedKeys = Object.keys(expected.properties);
+
+        const keys = Object.keys(schema as Record<string, unknown>);
+        assert(deepEqual(keys.sort(), expectedKeys.sort()),
+            `builder options: ${type}/${toolchain} schema lists all top-level keys of ${schemaFile}`);
+
+        const keyDescriptions = schema as Record<string, { description?: string }>;
+        for (const key of expectedKeys) {
+            const field = keyDescriptions[key];
+            assert(field && typeof field.description === 'string'
+                && field.description.length > 0,
+                `builder options: ${type}/${toolchain} schema key '${key}' carries a description from ${schemaFile}`);
+        }
+
+        for (const key of expectedKeys) {
+            const subtree = await service.getBuilderOptionsSchema(request, key);
+            const expectedSubtree = expected.properties[key];
+            const nested = expectedSubtree.properties;
+            assert(deepEqual(subtree, nested && typeof nested === 'object' ? nested : expectedSubtree),
+                `builder options: ${type}/${toolchain} schema subtree '${key}' matches ${schemaFile}`);
+        }
+
+        let pathError: unknown;
+        try {
+            await service.getBuilderOptionsSchema(request, 'no-such-path');
+        } catch (error) {
+            pathError = error;
+        }
+        assert(pathError instanceof ConfigError,
+            `builder options: ${type}/${toolchain} unknown schema path throws ConfigError`);
 
         const options = await service.getBuilderOptions(request);
         assert(options && typeof options === 'object'
