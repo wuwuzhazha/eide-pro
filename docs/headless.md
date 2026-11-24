@@ -241,8 +241,9 @@ Tool calls are serialized. A debug session stays active until
 ### Example agent session
 
 Recorded against the `cortex-m3` fixture (toolchain paths omitted). `…` hides
-fields not relevant to the step. Tool arguments carry the project `uid`
-(required by build and flash tools); `eide_flash` also requires `eraseAll`.
+fields not relevant to the step. When the server loads a single project, `uid`
+is optional in tool arguments (it must still match that project when given);
+`eide_flash` also requires `eraseAll`.
 
 ```jsonc
 // eide_build { "uid": "headless-e2e" }

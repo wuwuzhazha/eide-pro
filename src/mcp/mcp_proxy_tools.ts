@@ -34,6 +34,7 @@ export type ToolDelegate = (tool: string, args: Record<string, unknown>) => Prom
 export interface McpServerOptions {
     debugTools?: boolean;
     headless?: boolean;
+    singleProject?: boolean;
 }
 
 export function createMcpServer(
@@ -55,7 +56,13 @@ export function createMcpServer(
         }
     );
 
-    const uidSchema = z.string().describe('Project UID (cannot be empty). You can get it from "<Your workspace>/.eide/eide.yml", property name is "miscInfo.uid"');
+    const uidSchema = (options.singleProject
+        ? z.string().optional()
+        : z.string()
+    ).describe('Project UID. You can get it from "<Your workspace>/.eide/eide.yml", property name is "miscInfo.uid".' +
+        (options.singleProject
+            ? ' Optional: the server loads a single project, the uid must still match that project when given.'
+            : ' Required.'));
     const stopTimeoutSchema = z.number().int().positive().optional().describe(
         'Stop-event timeout in milliseconds (default: 30000).');
 

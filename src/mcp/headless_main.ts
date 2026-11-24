@@ -165,7 +165,11 @@ export async function main(argv: string[]): Promise<number> {
         logger: new StderrLogger()
     };
     const server = createMcpServer(
-        createHeadlessToolExecutor(options), { debugTools: true, headless: true });
+        createHeadlessToolExecutor(options), {
+            debugTools: true,
+            headless: true,
+            singleProject: args.projectPaths.length === 1
+        });
     await server.connect(new StdioServerTransport());
     return 0;
 }
