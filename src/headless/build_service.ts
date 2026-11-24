@@ -176,6 +176,10 @@ export class EideBuildService implements BuildService {
             const problems = toProblems(project, toolchain, compilerLog);
             const success = processResult.code === 0
                 && !problems.some(problem => problem.severity === 'error');
+            const failureKind: 'timeout' | 'signal' | 'build' | undefined = success ? undefined
+                : timeoutError !== undefined ? 'timeout'
+                    : processResult.code === null ? 'signal' : 'build';
+            const failureDetails = success ? {} : { failureKind };
             let analysisError = timeoutError;
             if (compilerLog === undefined && processResult.code !== 0 && analysisError === undefined) {
                 analysisError = `Build log not found: ${compilerLogPath}`;
@@ -202,7 +206,8 @@ export class EideBuildService implements BuildService {
                 includeDirs: Array.isArray(params.incDirs) ? params.incDirs : [],
                 success,
                 artifacts,
-                compileCommands
+                compileCommands,
+                ...failureDetails
             });
 
             return {
@@ -216,7 +221,8 @@ export class EideBuildService implements BuildService {
                 compileCommands,
                 effectiveConfig: effectiveConfig(params, outDir),
                 logTail: success ? undefined : makeLogTail(logText),
-                analysisError
+                analysisError,
+                ...failureDetails
             };
         } finally {
             session.close();

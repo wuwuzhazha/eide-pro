@@ -18,7 +18,8 @@ export class NodeProcessRunner implements ProcessRunner {
             const child = spawn(file, args, {
                 cwd: options.cwd,
                 env: options.env,
-                windowsHide: true
+                windowsHide: true,
+                detached: process.platform !== 'win32'
             });
             let stdout = '';
             let stderr = '';
@@ -51,7 +52,11 @@ export class NodeProcessRunner implements ProcessRunner {
                     return;
                 }
                 timer = setTimeout(() => {
-                    child.kill();
+                    if (process.platform === 'win32') {
+                        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+                    } else {
+                        process.kill(-child.pid!, 'SIGKILL');
+                    }
                     finish(() => reject(new ProcessTimeoutError(options.timeoutMs!, stdout, stderr)));
                 }, options.timeoutMs);
             }

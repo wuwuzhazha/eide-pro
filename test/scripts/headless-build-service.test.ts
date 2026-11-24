@@ -147,6 +147,7 @@ async function run(): Promise<void> {
     });
     const failed = await failureService.build({ projectPath: root, mode: 'rebuild' });
     assert(failed.success === false, 'service: failed build');
+    assert(failed.failureKind === 'build', 'service: build failure kind');
     assert(failed.stage === 'compile', 'service: failure stage');
     assert(failed.problems[0].severity === 'error', 'service: parses error');
     assert(failed.logTail.includes('expected expression'), 'service: log tail');
@@ -162,7 +163,22 @@ async function run(): Promise<void> {
     const timedOut = await timeoutService.build({ projectPath: root });
     assert(timedOut.success === false && timedOut.analysisError.includes('timed out'),
         'service: timeout is reported');
+    assert(timedOut.failureKind === 'timeout', 'service: timeout failure kind');
     assert(timedOut.logTail.includes('partial'), 'service: timeout log tail');
+
+    const signalService = new EideBuildService({
+        resourcesDir: resources,
+        toolchainPath: toolchain,
+        runner: new FakeRunner(() => ({ code: null, stdout: 'signal', stderr: '' })),
+        timeoutMs: 5000
+    });
+    const signaled = await signalService.build({ projectPath: root });
+    assert(signaled.success === false && signaled.failureKind === 'signal',
+        'service: signal failure kind');
+
+    const failedManifest = JSON.parse(fs.readFileSync(
+        NodePath.join(outDir, 'build-manifest.json'), 'utf8'));
+    assert(failedManifest.failureKind === 'signal', 'service: manifest writes failure kind');
 
     const cleaned = await successService.clean({ projectPath: root });
     assert(cleaned.success === true && !fs.existsSync(outDir), 'service: clean removes output');

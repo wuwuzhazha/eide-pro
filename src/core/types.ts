@@ -43,6 +43,7 @@ export interface BuildResult {
     success: boolean;
     buildId?: string;
     configHash?: string;
+    failureKind?: 'timeout' | 'signal' | 'build';
     stage: BuildStage;
     problems: BuildProblem[];
     memory: { [region: string]: MemoryRegionUsage };

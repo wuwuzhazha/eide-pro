@@ -16,6 +16,7 @@ export interface BuildManifest {
     success: boolean;
     artifacts: string[];
     compileCommands?: string;
+    failureKind?: 'timeout' | 'signal' | 'build';
 }
 
 function normalize(value: unknown): unknown {
