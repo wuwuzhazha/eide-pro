@@ -138,7 +138,8 @@ The headless host loads the same `.eide/eide.yml` project model and generates
 build parameters with the same `CodeBuilder` as the VS Code extension. Headless
 builds therefore honor `.eide/env.ini`, virtual source folders,
 `dependenceList` groups, per-file options, workspace settings, dynamic
-overrides, and xpack-managed toolchains.
+overrides, and xpack-managed toolchains. Coming from the original EIDE? See
+[migrating-from-eide.md](./docs/migrating-from-eide.md).
 
 ### CLI
 

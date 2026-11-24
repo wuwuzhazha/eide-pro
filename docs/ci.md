@@ -47,6 +47,26 @@ Each command prints one JSON object to stdout; logs go to stderr. Exit codes:
 `plan` produces the build plan without compiling, useful to validate project
 configuration in CI without a toolchain.
 
+## Caching
+
+Incremental build artifacts live in the output directory reported by `plan`
+(`outDir`, `<project>/build/<target>` by default). Cache that directory and
+non-rebuild builds stay incremental. `eide-cli clean` deletes the whole
+directory, which forces a full rebuild.
+
+Cache key suggestion: the `configHash` from `eide-cli plan` (it changes when
+`-D`, `--cflag`-style inputs change) combined with a source-file hash, for
+example:
+
+```yaml
+    # example — adjust to your project
+    - name: Cache build output
+      uses: actions/cache@v4
+      with:
+        path: firmware/build
+        key: eide-${{ hashFiles('firmware/.eide/**', '**/*.c', '**/*.h') }}
+```
+
 ## GitHub Actions example
 
 Example only — adjust paths, runner, and toolchain.
