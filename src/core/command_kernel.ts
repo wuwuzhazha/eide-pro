@@ -5,10 +5,9 @@ import { loadProjectSnapshot } from './project_snapshot';
 import type { FlashResult } from './flash/types';
 import type { FlashProgram } from './flash/types';
 import type { ProcessRunner } from './adapters';
-import { CliUsageError } from '../cli/args';
 import { BuildExecutionError } from './build_service';
 import { FlashBuildError } from './flash/builders';
-import { ConfigError } from './errors';
+import { ConfigError, CliUsageError } from './errors';
 
 export { ConfigError } from './errors';
 

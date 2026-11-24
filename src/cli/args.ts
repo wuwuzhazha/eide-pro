@@ -39,12 +39,8 @@ export type ParsedCli =
 export const DEFAULT_BUILD_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_FLASH_TIMEOUT_MS = 2 * 60 * 1000;
 
-export class CliUsageError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'CliUsageError';
-    }
-}
+export { CliUsageError } from '../core/errors';
+import { CliUsageError } from '../core/errors';
 
 export const cliHelp = [
     'Usage:',

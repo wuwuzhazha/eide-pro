@@ -8,6 +8,7 @@ import {
     migrateProjectConfig,
     needsProjectConfigMigration
 } from '../core/project_config_migration';
+import { CliUsageError, ConfigError } from '../core/errors';
 
 export interface HeadlessTemplate {
     name: string;
@@ -48,8 +49,12 @@ export interface CreateProjectResult {
     files: number;
 }
 
-function fail(message: string): never {
-    throw new Error(message);
+function usageError(message: string): never {
+    throw new CliUsageError(message);
+}
+
+function configError(message: string): never {
+    throw new ConfigError(message);
 }
 
 function listFiles(root: string): string[] {
@@ -73,7 +78,7 @@ function sevenZipExecutable(resourcesDir: string): string {
     const executable = NodePath.join(
         NodePath.resolve(resourcesDir), 'tools', process.platform, '7z', `7za${suffix}`);
     if (!fs.existsSync(executable)) {
-        fail(`7z executable not found: ${executable}`);
+        configError(`7z executable not found: ${executable}`);
     }
     return executable;
 }
@@ -88,7 +93,7 @@ function extractTemplate(templateFile: string, targetDir: string, resourcesDir: 
         timeout: TEMPLATE_EXTRACT_TIMEOUT_MS
     });
     if (result === undefined) {
-        fail(`Failed to extract template: ${templateFile}`);
+        configError(`Failed to extract template: ${templateFile}`);
     }
 }
 
@@ -126,11 +131,11 @@ function readConfig(projectDir: string): { config: any; file: string } {
     const ymlFile = NodePath.join(projectDir, '.eide', 'eide.yml');
     const file = fs.existsSync(ymlFile) ? ymlFile : jsonFile;
     if (!fs.existsSync(file)) {
-        fail(`Template has no .eide/eide.json or .eide/eide.yml: ${projectDir}`);
+        configError(`Template has no .eide/eide.json or .eide/eide.yml: ${projectDir}`);
     }
     const config = yaml.parse(fs.readFileSync(file, 'utf8'));
     if (config === null || typeof config !== 'object' || Array.isArray(config)) {
-        fail(`Invalid project configuration in template: ${file}`);
+        configError(`Invalid project configuration in template: ${file}`);
     }
     return { config, file };
 }
@@ -138,28 +143,28 @@ function readConfig(projectDir: string): { config: any; file: string } {
 export function createProject(options: CreateProjectOptions): CreateProjectResult {
     const template = HEADLESS_TEMPLATES.find(item => item.name === options.template);
     if (!template) {
-        fail(`Unknown template: ${options.template}. Available: ${
+        usageError(`Unknown template: ${options.template}. Available: ${
             HEADLESS_TEMPLATES.map(item => item.name).join(', ')}`);
     }
     const name = options.name.trim();
     if (name === '') {
-        fail('Project name must not be empty.');
+        usageError('Project name must not be empty.');
     }
     if (/\s/.test(name)) {
-        fail('Project name cannot contain whitespace.');
+        usageError('Project name cannot contain whitespace.');
     }
     if (/[&<>()@^|]/.test(name)) {
-        fail('Project name contains invalid characters.');
+        usageError('Project name contains invalid characters.');
     }
 
     const templateFile = NodePath.join(
         NodePath.resolve(options.resourcesDir), 'template', `${template.name}.ept`);
     if (!fs.existsSync(templateFile)) {
-        fail(`Template file not found: ${templateFile}`);
+        configError(`Template file not found: ${templateFile}`);
     }
     const projectPath = NodePath.resolve(options.outputDir, name);
     if (fs.existsSync(projectPath)) {
-        fail(`Project directory already exists: ${projectPath}`);
+        configError(`Project directory already exists: ${projectPath}`);
     }
 
     extractTemplate(templateFile, projectPath, options.resourcesDir);
@@ -167,7 +172,7 @@ export function createProject(options: CreateProjectOptions): CreateProjectResul
     const workspaces = fs.readdirSync(projectPath)
         .filter(entry => entry.endsWith('.code-workspace'));
     if (workspaces.length === 0) {
-        fail(`Template has no .code-workspace file: ${templateFile}`);
+        configError(`Template has no .code-workspace file: ${templateFile}`);
     }
     const workspaceFile = NodePath.join(projectPath, `${options.projectName || name}.code-workspace`);
     const sourceWorkspace = NodePath.join(projectPath, workspaces[0]);
