@@ -41,7 +41,15 @@ function tryAcquire(fpath: string): number | undefined {
         }
     }
 
-    const holder = readHolderPid(fpath);
+    let holder: number | undefined;
+    try {
+        holder = readHolderPid(fpath);
+    } catch (readError) {
+        if ((<NodeJS.ErrnoException>readError).code === 'ENOENT') {
+            return undefined;
+        }
+        throw readError;
+    }
     if (holder !== undefined && isProcessAlive(holder)) {
         return undefined;
     }
@@ -50,13 +58,22 @@ function tryAcquire(fpath: string): number | undefined {
     try {
         fs.renameSync(fpath, reclaimPath);
     } catch (renameError) {
-        if ((<NodeJS.ErrnoException>renameError).code === 'ENOENT') {
+        const code = (<NodeJS.ErrnoException>renameError).code;
+        if (code === 'ENOENT' || code === 'EPERM' || code === 'EBUSY') {
             return undefined;
         }
         throw renameError;
     }
 
-    const reclaimed = readHolderPid(reclaimPath);
+    let reclaimed: number | undefined;
+    try {
+        reclaimed = readHolderPid(reclaimPath);
+    } catch (readReclaimError) {
+        if ((<NodeJS.ErrnoException>readReclaimError).code === 'ENOENT') {
+            return undefined;
+        }
+        throw readReclaimError;
+    }
     if (reclaimed !== undefined && isProcessAlive(reclaimed)) {
         try {
             fs.linkSync(reclaimPath, fpath);

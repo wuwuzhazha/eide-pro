@@ -22,50 +22,83 @@ function lockPath(name: string): string {
 
 interface ChildLockResult {
     verdict: Promise<string>;
-    finish(): void;
-    exited: Promise<void>;
+    closed: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+    detail(): string;
+    stop(): void;
 }
 
 function startChildLock(path: string): ChildLockResult {
     const modulePath = NodePath.join(__dirname, '..', '..', 'src', 'core', 'project_lock.js');
     const script = `
-        const ProjectLock = require(${JSON.stringify(modulePath)});
-        const fd = ProjectLock.acquireProjectLock(${JSON.stringify(path)});
-        if (fd === undefined) {
-            process.stdout.write('REJECTED\\n');
-            process.exit(0);
+        try {
+            const ProjectLock = require(${JSON.stringify(modulePath)});
+            const fd = ProjectLock.acquireProjectLock(${JSON.stringify(path)});
+            if (fd === undefined) {
+                process.stdout.write('REJECTED\\n');
+                process.exit(0);
+            }
+            process.stdout.write('LOCKED\\n');
+            process.stdin.resume();
+        } catch (error) {
+            process.stderr.write(String((error && error.stack) || error));
+            process.exit(2);
         }
-        process.stdout.write('LOCKED\\n');
-        process.stdin.resume();
-        process.stdin.on('end', () => process.exit(0));
     `;
     const child = spawn(process.execPath, ['-e', script], { stdio: ['pipe', 'pipe', 'pipe'] });
-    let verdictResolved = false;
+    let stdout = '';
     let stderr = '';
+    let exit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+    let verdictResolved = false;
+    const settleVerdict = (value: string, resolve: (value: string) => void) => {
+        if (verdictResolved) {
+            return;
+        }
+        verdictResolved = true;
+        resolve(value);
+    };
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
     const verdict = new Promise<string>((resolve) => {
-        let buffered = '';
         child.stdout.on('data', (chunk: Buffer) => {
-            buffered += chunk.toString();
-            const idx = buffered.indexOf('\n');
-            if (idx !== -1 && !verdictResolved) {
-                verdictResolved = true;
-                resolve(buffered.slice(0, idx));
+            stdout += chunk.toString();
+            const idx = stdout.indexOf('\n');
+            if (idx !== -1) {
+                settleVerdict(stdout.slice(0, idx).trim() || 'EXITED', resolve);
             }
         });
         child.on('close', () => {
-            if (!verdictResolved) {
-                verdictResolved = true;
-                resolve(`EXITED(${stderr.trim()})`);
-            }
+            settleVerdict(stdout.split('\n')[0].trim() || 'EXITED', resolve);
         });
     });
-    const exited = new Promise<void>((resolve) => child.on('close', () => resolve()));
+    const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+        child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+            exit = { code, signal };
+            resolve(exit);
+        });
+    });
     return {
         verdict,
-        finish: () => child.stdin.end(),
-        exited
+        closed,
+        detail: () => `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)} exit=${JSON.stringify(exit)}`,
+        stop: () => child.kill()
     };
+}
+
+async function runChildPair(path: string, message: string): Promise<void> {
+    const children = [startChildLock(path), startChildLock(path)];
+    const verdicts = Promise.all(children.map(child => child.verdict));
+    const closes = Promise.all(children.map(child => child.closed));
+    const resolvedVerdicts = await verdicts;
+    children.forEach((child, index) => {
+        if (resolvedVerdicts[index] === 'LOCKED') {
+            child.stop();
+        }
+    });
+    const exits = await closes;
+    const detail = children.map((child, index) => `#${index} ${child.detail()}`).join(' | ');
+    assert(exits.every(item => item.code !== 2),
+        `${message}: no child crashed ${detail}`);
+    assert(resolvedVerdicts.filter(verdict => verdict === 'LOCKED').length === 1,
+        `${message} (${resolvedVerdicts.join(',')}) ${detail}`);
 }
 
 async function run(): Promise<void> {
@@ -98,26 +131,12 @@ async function run(): Promise<void> {
             'lock: leaves no temporary file behind');
     }
 
-    {
-        const path = lockPath('race');
-        const children = [startChildLock(path), startChildLock(path)];
-        const verdicts = await Promise.all(children.map(child => child.verdict));
-        children.forEach(child => child.finish());
-        await Promise.all(children.map(child => child.exited));
-        assert(verdicts.filter(verdict => verdict === 'LOCKED').length === 1,
-            `lock: exactly one of two concurrent processes wins (${verdicts.join(',')})`);
-    }
+    await runChildPair(lockPath('race'),
+        'lock: exactly one of two concurrent processes wins');
 
-    {
-        const path = lockPath('race-stale');
-        fs.writeFileSync(path, '');
-        const children = [startChildLock(path), startChildLock(path)];
-        const verdicts = await Promise.all(children.map(child => child.verdict));
-        children.forEach(child => child.finish());
-        await Promise.all(children.map(child => child.exited));
-        assert(verdicts.filter(verdict => verdict === 'LOCKED').length === 1,
-            `lock: exactly one of two concurrent processes reclaims a stale lock (${verdicts.join(',')})`);
-    }
+    fs.writeFileSync(lockPath('race-stale'), '');
+    await runChildPair(lockPath('race-stale'),
+        'lock: exactly one of two concurrent processes reclaims a stale lock');
 
     {
         const path = lockPath('reclaim-raced');
