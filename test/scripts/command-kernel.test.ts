@@ -2,7 +2,8 @@ const fs = require('fs');
 const os = require('os');
 const NodePath = require('path');
 const yaml = require('yaml');
-const { classifyError, createCommandKernel } = require('../../../src/core/command_kernel') as any;
+const { CliUsageError } = require('../../../src/cli/args') as any;
+const { classifyError, ConfigError, createCommandKernel } = require('../../../src/core/command_kernel') as any;
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {
@@ -32,8 +33,17 @@ function config(outDir: string): any {
             Debug: {
                 toolchain: 'GCC',
                 toolchainConfigMap: { GCC: { options: {} } },
-                uploader: 'Custom',
-                uploadConfigMap: { Custom: {} }
+                uploader: 'JLink',
+                uploadConfigMap: {
+                    JLink: {
+                        bin: '',
+                        baseAddr: '0x08000000',
+                        cpuInfo: { cpuName: 'test-device', vendor: 'ST' },
+                        proType: 1,
+                        speed: 4000,
+                        otherCmds: ''
+                    }
+                }
             }
         }
     };
@@ -45,7 +55,7 @@ async function run(): Promise<void> {
     const outDir = NodePath.join(root, 'build', 'Debug');
     write(NodePath.join(outDir, 'demo.hex'), 'hex');
 
-    const kernel = createCommandKernel();
+    const kernel = createCommandKernel({ runner: { run: async () => ({ code: 0, stdout: '', stderr: '' }) } });
     const cleaned = await kernel.clean({
         command: 'clean',
         projectPath: root,
@@ -65,16 +75,24 @@ async function run(): Promise<void> {
         && escaped.error.kind === 'config' && escaped.error.message.includes('Refusing'),
         'kernel: clean rejects outDir escape as config error');
 
-    const usage = new Error('bad option');
-    usage.name = 'CliUsageError';
-    assert(classifyError(usage, null).error.kind === 'usage', 'kernel: classifies usage errors');
+    assert(classifyError(new CliUsageError('bad option'), null).error.kind === 'usage',
+        'kernel: classifies usage errors');
 
-    const tool = new Error('builder failed');
-    tool.name = 'BuildExecutionError';
-    assert(classifyError(tool, 'clean').error.kind === 'tool', 'kernel: classifies tool errors');
-
-    assert(classifyError(new Error('boom'), 'clean').error.kind === 'config',
+    assert(classifyError(new ConfigError('bad config'), 'clean').error.kind === 'config',
         'kernel: classifies config errors');
+    assert(classifyError(new Error('boom'), 'clean').error.kind === 'internal',
+        'kernel: classifies internal errors');
+
+    const flashResult = await kernel.flash({
+        command: 'flash',
+        projectPath: root,
+        target: 'Debug',
+        flasherExecutable: 'C:/fake/JLink.exe',
+        eraseAll: true,
+        verify: true
+    });
+    assert(flashResult.success === false && flashResult.error.kind === 'config',
+        'kernel: flash not_supported is a config error');
 }
 
 run()

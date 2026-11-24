@@ -4,15 +4,13 @@ import * as NodePath from 'path';
 import { BuildStatistics, queryCallgraph, summarizeStackUsage } from '../BuildStatistics';
 import { EideBuildService, ProjectRequest } from '../headless/build_service';
 import { validateBuildOverrides } from '../core/build_overrides';
-import { createFlashPlan } from '../core/flash/plan';
-import { ProcessFlashService } from '../core/flash/service';
 import { Logger, ProcessRunner } from '../core/adapters';
 import { loadProjectSnapshot } from '../core/project_snapshot';
 import { BuildOverrides } from '../core/types';
 import { MiSpawn } from '../core/debug/mi';
 import { HeadlessDebugSession } from './headless_debug';
 import { HeadlessProject } from './headless_project';
-import { classifyError, createCommandKernel, CommandResult } from '../core/command_kernel';
+import { classifyError, ConfigError, createCommandKernel, CommandResult } from '../core/command_kernel';
 
 const DEFAULT_TOOL_WATCHDOG_MS = 120_000;
 const TOOL_TIMEOUT_GRACE_MS = 30_000;
@@ -127,9 +125,10 @@ class HeadlessToolRunner {
     private readonly projects = new Map<string, HeadlessProject>();
     private readonly debug: HeadlessDebugSession;
     private readonly builder: EideBuildService;
-    private readonly kernel = createCommandKernel();
+    private readonly kernel: ReturnType<typeof createCommandKernel>;
 
     constructor(private readonly options: HeadlessToolOptions) {
+        this.kernel = createCommandKernel({ runner: options.runner });
         this.builder = new EideBuildService({
             resourcesDir: options.resourcesDir,
             extensionRoot: options.extensionRoot,
@@ -157,19 +156,19 @@ class HeadlessToolRunner {
             const project = Array.from(this.projects.values())[0];
             const projectUid = project.getUid();
             if (uid && projectUid && projectUid !== uid) {
-                throw new Error(`Not such project (uid=${uid}).`);
+                throw new ConfigError(`Not such project (uid=${uid}).`);
             }
             return project;
         }
         if (!uid) {
-            throw new Error("Params 'uid' cannot be empty.");
+            throw new ConfigError("Params 'uid' cannot be empty.");
         }
         for (const project of this.projects.values()) {
             if (project.getUid() === uid) {
                 return project;
             }
         }
-        throw new Error(`Not such project (uid=${uid}).`);
+        throw new ConfigError(`Not such project (uid=${uid}).`);
     }
 
     private projectRequest(project: HeadlessProject): ProjectRequest {
@@ -230,26 +229,19 @@ class HeadlessToolRunner {
                 const verify = readOptionalBoolean(args.verify, 'verify');
                 const dryRun = readOptionalBoolean(args.dryRun, 'dryRun') === true;
                 if (artifact !== undefined && args.eraseAll === true) {
-                    throw new Error("'artifact' cannot be combined with 'eraseAll'.");
+                    throw new ConfigError("'artifact' cannot be combined with 'eraseAll'.");
                 }
-                const snapshot = loadProjectSnapshot(
-                    project.projectPath, project.getTargetName());
-                const plan = createFlashPlan(snapshot, {
+                const result = await this.kernel.flash({
+                    command: 'flash',
+                    ...this.projectRequest(project),
                     flasherExecutable: this.options.flasherExecutable,
                     timeoutMs: this.options.flashTimeoutMs,
                     eraseAll: args.eraseAll === true,
                     verify,
-                    artifact
+                    artifact,
+                    dryRun
                 });
-                if (dryRun) {
-                    return makeJsonResult({
-                        uploader: plan.uploader,
-                        command: plan.command,
-                        request: plan.request
-                    });
-                }
-                const result = await new ProcessFlashService(this.options.runner).flash(plan.request);
-                return makeJsonResult({ uploader: plan.uploader, ...result }, !result.success);
+                return makeEnvelopeResult(result);
             }
             case 'eide_reload':
                 return makeTextResult(true, 'Succeed.');

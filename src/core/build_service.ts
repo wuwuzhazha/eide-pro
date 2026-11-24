@@ -3,6 +3,7 @@ import * as NodePath from 'path';
 import { loadProjectSnapshot, ProjectSnapshot, resolveOutputDir } from './project_snapshot';
 import { CleanResult } from './services';
 import { BuildRequest } from './types';
+import { ConfigError } from './command_kernel';
 
 export class BuildExecutionError extends Error {
     constructor(message: string, public readonly original: unknown) {
@@ -16,7 +17,7 @@ export function cleanOutputDir(snapshot: ProjectSnapshot): CleanResult {
     const relative = NodePath.relative(snapshot.projectPath, outDir);
     if (relative.length === 0 || relative === '..' || relative.startsWith(`..${NodePath.sep}`)
         || NodePath.isAbsolute(relative)) {
-        throw new Error(`Refusing to clean output directory outside project: ${outDir}`);
+        throw new ConfigError(`Refusing to clean output directory outside project: ${outDir}`);
     }
     if (!fs.existsSync(outDir)) {
         return { success: true, message: 'Output directory does not exist.' };

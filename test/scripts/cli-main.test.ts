@@ -116,7 +116,8 @@ async function run(): Promise<void> {
 
     text = io();
     code = await main(['build', '--project', root], text);
-    assert(code === 3 && text.err().includes('--resources'), 'cli: missing environment is a usage error');
+    assert(code === 4 && text.err().includes('--resources'),
+        'cli: missing environment is an internal error');
 
     text = io();
     const missingToolchain = NodePath.join(root, 'no-such-toolchain');
@@ -143,10 +144,10 @@ async function run(): Promise<void> {
     const flash = JSON.parse(text.out());
     assert(code === 0 && flash.command === 'flash' && flash.uploader === 'JLink',
         'cli: flash dry-run succeeds');
-    assert(flash.args.includes('-Device') && flash.args.includes('test-device'),
+    assert(flash.invocation.args.includes('-Device') && flash.invocation.args.includes('test-device'),
         'cli: flash args');
     assert(flash.programs[0].path.endsWith('demo.hex'), 'cli: flash default artifact');
-    assert(flash.script.contents.includes('loadfile'), 'cli: flash script');
+    assert(flash.invocation.script.contents.includes('loadfile'), 'cli: flash script');
 
     const outDir = NodePath.join(root, 'build', 'Debug');
     write(NodePath.join(outDir, 'old.elf'), 'elf');

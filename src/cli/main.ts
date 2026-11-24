@@ -1,12 +1,8 @@
 #!/usr/bin/env node
-import { BuildExecutionError } from '../core/build_service';
 import { classifyError, createCommandKernel } from '../core/command_kernel';
 import { EideBuildService } from '../headless/build_service';
-import { createFlashPlan } from '../core/flash/plan';
-import { ProcessFlashService } from '../core/flash/service';
 import { StderrLogger } from '../core/logger';
 import { NodeProcessRunner } from '../core/process_runner';
-import { loadProjectSnapshot } from '../core/project_snapshot';
 import { BuildRequest } from '../core/types';
 import { bundledResourcesDir } from '../headless/package_paths';
 import { createProject } from '../headless/project_creator';
@@ -80,7 +76,8 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
         }
 
         if (command === 'clean') {
-            const result = await createCommandKernel().clean({
+            const kernel = createCommandKernel({ runner: new NodeProcessRunner() });
+            const result = await kernel.clean({
                 command: 'clean',
                 projectPath: options.projectPath,
                 workspaceFile: options.workspaceFile,
@@ -95,35 +92,33 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
         }
 
         if (command === 'flash') {
-            const snapshot = loadProjectSnapshot(
-                options.workspaceFile ?? options.projectPath, options.target);
-            const plan = createFlashPlan(snapshot, {
+            const kernel = createCommandKernel({ runner: new NodeProcessRunner() });
+            const result = await kernel.flash({
+                command: 'flash',
+                projectPath: options.projectPath,
+                workspaceFile: options.workspaceFile,
+                target: options.target,
                 flasherExecutable: options.flasherExecutable,
                 timeoutMs: options.timeoutMs,
                 eraseAll: options.eraseAll,
                 verify: options.verify,
-                artifact: options.artifact
+                artifact: options.artifact,
+                dryRun: options.dryRun
             });
-            if (options.dryRun) {
-                writeJson(io, {
-                    success: true,
-                    command: 'flash',
-                    uploader: plan.uploader,
-                    executable: plan.command.executable,
-                    args: plan.command.args,
-                    script: plan.command.script,
-                    verify: plan.request.verify,
-                    eraseAll: plan.request.eraseAll,
-                    programs: plan.request.programs
-                });
-                return 0;
-            }
-            const result = await new ProcessFlashService(new NodeProcessRunner()).flash(plan.request);
-            writeJson(io, { command, uploader: plan.uploader, ...result });
+            writeJson(io, result);
             if (result.success) {
                 return 0;
             }
-            return result.code === 'not_supported' || result.code === 'invalid_request' ? 3 : 2;
+            if (result.error.kind === 'usage') {
+                return 3;
+            }
+            if (result.error.kind === 'config') {
+                return 3;
+            }
+            if (result.error.kind === 'tool') {
+                return 4;
+            }
+            return 2;
         }
 
         const service = new EideBuildService({
@@ -164,9 +159,9 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
             writeJson(io, errorPayload(command || null, err, 'usage'));
             return 3;
         }
-        const kind = err instanceof BuildExecutionError ? 'tool' : 'config';
-        writeJson(io, errorPayload(command || null, err, kind));
-        return kind === 'tool' ? 4 : 3;
+        const failure = classifyError(err, command || null);
+        writeJson(io, failure);
+        return failure.error.kind === 'tool' || failure.error.kind === 'internal' ? 4 : 3;
     }
 }
 

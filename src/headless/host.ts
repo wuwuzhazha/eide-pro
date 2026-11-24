@@ -10,6 +10,7 @@ import { findExtensionRoot, loadHeadlessSettings } from './settings';
 import { ensureBundledToolPermissions } from './tool_permissions';
 import { EXTENSION_ID } from '../ExtensionInfo';
 import { installVscodeShim } from './vscode';
+import { ConfigError } from '../core/command_kernel';
 
 const TOOLCHAIN_SETTING_KEYS: { [key: string]: string } = {
     'ARM:GCC': 'ARM.GCC.InstallDirectory',
@@ -142,7 +143,7 @@ function applyToolchainPath(
     }
     const stat = fs.statSync(toolchainPath, { throwIfNoEntry: false });
     if (!stat || !stat.isDirectory()) {
-        throw new Error(
+            throw new ConfigError(
             `--toolchain-path does not exist or is not a directory: ${toolchainPath}`);
     }
     const targetConfig = config.targets[target];
@@ -150,7 +151,7 @@ function applyToolchainPath(
     const toolchain = String(targetConfig.toolchain || '');
     const key = TOOLCHAIN_SETTING_KEYS[`${type}:${toolchain}`];
     if (!key) {
-        throw new Error(
+            throw new ConfigError(
             `--toolchain-path is not mapped for project type '${type}' and toolchain '${toolchain}'; ` +
             'use --settings with the toolchain install directory.');
     }

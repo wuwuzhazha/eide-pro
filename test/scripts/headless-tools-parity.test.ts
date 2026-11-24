@@ -159,18 +159,18 @@ async function flashDryRunTest(): Promise<void> {
     let data = parse(result);
     assert(result.isError !== true && data.uploader === 'JLink',
         'parity: flash dry-run returns the plan');
-    assert(data.command.executable === 'C:/tools/JLink.exe',
+    assert(data.invocation.executable === 'C:/tools/JLink.exe',
         'parity: flash dry-run uses the configured flasher executable');
-    assert(data.request.verify === true && data.command.verify === true,
+    assert(data.verify === true && data.eraseAll === false,
         'parity: flash dry-run passes verify');
-    assert(data.request.programs.length === 2
-        && data.request.programs[0].path === NodePath.join(root, 'fw', 'app.bin')
-        && data.request.programs[0].address === '0x08004000'
-        && data.request.programs[1].path === NodePath.join(root, 'extra.hex'),
+    assert(data.programs.length === 2
+        && data.programs[0].path === NodePath.join(root, 'fw', 'app.bin')
+        && data.programs[0].address === '0x08004000'
+        && data.programs[1].path === NodePath.join(root, 'extra.hex'),
     'parity: flash dry-run passes artifact entries');
-    assert(data.command.script.contents.includes('loadfile')
-        && data.command.script.contents.includes('app.bin')
-        && data.command.script.contents.includes(',0x08004000'),
+    assert(data.invocation.script.contents.includes('loadfile')
+        && data.invocation.script.contents.includes('app.bin')
+        && data.invocation.script.contents.includes(',0x08004000'),
     'parity: flash dry-run command contains the artifact');
     assert(runner.calls.length === 0, 'parity: flash dry-run does not run the flasher');
 
