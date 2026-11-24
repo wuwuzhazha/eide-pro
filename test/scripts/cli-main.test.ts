@@ -153,7 +153,8 @@ async function run(): Promise<void> {
     text = io();
     code = await main(['clean', '--project', root], text);
     const cleaned = JSON.parse(text.out());
-    assert(code === 0 && cleaned.success === true, 'cli: clean succeeds');
+    assert(code === 0 && cleaned.success === true && cleaned.command === 'clean',
+        'cli: clean succeeds');
     assert(!fs.existsSync(outDir), 'cli: clean removes output');
 
     text = io();

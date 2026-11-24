@@ -12,6 +12,7 @@ import { BuildOverrides } from '../core/types';
 import { MiSpawn } from '../core/debug/mi';
 import { HeadlessDebugSession } from './headless_debug';
 import { HeadlessProject } from './headless_project';
+import { classifyError, createCommandKernel, CommandResult } from '../core/command_kernel';
 
 const DEFAULT_TOOL_WATCHDOG_MS = 120_000;
 const TOOL_TIMEOUT_GRACE_MS = 30_000;
@@ -53,6 +54,10 @@ function makeJsonResult(data: unknown, isError = false): CallToolResult {
         isError,
         content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
     };
+}
+
+function makeEnvelopeResult(envelope: CommandResult<unknown>): CallToolResult {
+    return makeJsonResult(envelope, !envelope.success);
 }
 
 function errorMessage(error: unknown): string {
@@ -122,6 +127,7 @@ class HeadlessToolRunner {
     private readonly projects = new Map<string, HeadlessProject>();
     private readonly debug: HeadlessDebugSession;
     private readonly builder: EideBuildService;
+    private readonly kernel = createCommandKernel();
 
     constructor(private readonly options: HeadlessToolOptions) {
         this.builder = new EideBuildService({
@@ -175,7 +181,12 @@ class HeadlessToolRunner {
 
     async execute(tool: string, args: Record<string, unknown>): Promise<CallToolResult> {
         const uid = args.uid as string | null | undefined;
-        const project = this.resolveProject(uid);
+        let project: HeadlessProject;
+        try {
+            project = this.resolveProject(uid);
+        } catch (error) {
+            return makeEnvelopeResult(classifyError(error, tool === 'eide_clean' ? 'clean' : null));
+        }
 
         switch (tool) {
             case 'eide_build':
@@ -208,8 +219,11 @@ class HeadlessToolRunner {
                 return makeJsonResult(result, !result.success);
             }
             case 'eide_clean': {
-                const result = await this.builder.clean(this.projectRequest(project));
-                return makeJsonResult(result, !result.success);
+                const result = await this.kernel.clean({
+                    command: 'clean',
+                    ...this.projectRequest(project)
+                });
+                return makeEnvelopeResult(result);
             }
             case 'eide_flash': {
                 const artifact = readOptionalString(args.artifact, 'artifact');

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { BuildExecutionError, cleanProject } from '../core/build_service';
+import { BuildExecutionError } from '../core/build_service';
+import { classifyError, createCommandKernel } from '../core/command_kernel';
 import { EideBuildService } from '../headless/build_service';
 import { createFlashPlan } from '../core/flash/plan';
 import { ProcessFlashService } from '../core/flash/service';
@@ -45,10 +46,10 @@ export function errorPayload(
     error: Error,
     kind: 'usage' | 'config' | 'tool' | 'internal'
 ): unknown {
+    const failure = classifyError(error, command);
     return {
-        success: false,
-        command,
-        error: { name: error.name, message: error.message, kind }
+        ...failure,
+        error: { ...failure.error, kind }
     };
 }
 
@@ -79,9 +80,18 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
         }
 
         if (command === 'clean') {
-            const result = cleanProject(toRequest(options));
-            writeJson(io, { command, ...result });
-            return result.success ? 0 : 2;
+            const result = await createCommandKernel().clean({
+                command: 'clean',
+                projectPath: options.projectPath,
+                workspaceFile: options.workspaceFile,
+                target: options.target
+            });
+            writeJson(io, result);
+            if (result.success) {
+                return 0;
+            }
+            return result.error.kind === 'usage' ? 3
+                : result.error.kind === 'tool' ? 4 : 3;
         }
 
         if (command === 'flash') {

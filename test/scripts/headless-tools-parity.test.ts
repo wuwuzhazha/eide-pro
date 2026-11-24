@@ -109,7 +109,7 @@ async function cleanTest(): Promise<void> {
     writeProject(root, projectConfig(
         'clean-uid',
         { Debug: target('GCC', 'Custom', {}) },
-        '${workspaceFolder}/custom-out'));
+        'custom-out'));
     const toolchainPath = toolchainLayout(root);
     const outDir = NodePath.join(root, 'custom-out', 'Debug');
     write(NodePath.join(outDir, 'demo.hex'), 'hex');
@@ -126,7 +126,8 @@ async function cleanTest(): Promise<void> {
     });
     const result = await execute('eide_clean', { uid: 'clean-uid' });
     const data = parse(result);
-    assert(result.isError !== true && data.success === true, 'parity: clean succeeds');
+    assert(result.isError !== true && data.success === true && data.command === 'clean',
+        'parity: clean succeeds');
     assert(!fs.existsSync(outDir), 'parity: clean removes the resolved outDir');
     assert(fs.existsSync(NodePath.join(root, 'custom-out', 'keep.txt')),
         'parity: clean keeps files outside the target outDir');
