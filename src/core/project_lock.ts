@@ -59,8 +59,21 @@ function tryAcquire(fpath: string): number | undefined {
         fs.renameSync(fpath, reclaimPath);
     } catch (renameError) {
         const code = (<NodeJS.ErrnoException>renameError).code;
-        if (code === 'ENOENT' || code === 'EPERM' || code === 'EBUSY') {
+        if (code === 'ENOENT') {
             return undefined;
+        }
+        if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
+            let sourceStat: fs.Stats | undefined;
+            try {
+                sourceStat = fs.statSync(fpath, { throwIfNoEntry: false });
+            } catch (statError) {
+                throw renameError;
+            }
+            if (sourceStat === undefined) {
+                return undefined;
+            }
+            throw new Error(
+                `Failed to reclaim lock '${fpath}': ${(<Error>renameError).message}`);
         }
         throw renameError;
     }

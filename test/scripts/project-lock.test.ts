@@ -161,6 +161,47 @@ async function run(): Promise<void> {
     }
 
     {
+        const path = lockPath('rename-denied');
+        fs.writeFileSync(path, '999999');
+        const originalRename = fs.renameSync;
+        fs.renameSync = () => {
+            const error: NodeJS.ErrnoException = new Error('EPERM: operation not permitted');
+            error.code = 'EPERM';
+            throw error;
+        };
+        let message = '';
+        try {
+            ProjectLock.acquireProjectLock(path);
+        } catch (error) {
+            message = error.message;
+        }
+        fs.renameSync = originalRename;
+        assert(message.includes(path),
+            'lock: rethrows a rename failure when the lock file is still there');
+    }
+
+    {
+        const path = lockPath('rename-denied-gone');
+        fs.writeFileSync(path, '999999');
+        const originalRename = fs.renameSync;
+        fs.renameSync = (from: string) => {
+            fs.rmSync(from, { force: true });
+            const error: NodeJS.ErrnoException = new Error('EPERM: operation not permitted');
+            error.code = 'EPERM';
+            throw error;
+        };
+        let result: number | undefined | string = 'threw';
+        try {
+            result = ProjectLock.acquireProjectLock(path);
+        } catch (error) {
+            result = 'threw';
+        }
+        fs.renameSync = originalRename;
+        assert(result === undefined,
+            'lock: returns undefined when the rename failure coincides with a vanished lock file');
+    }
+
+    {
         const path = lockPath('retry-raced');
         fs.writeFileSync(path, '999999');
         const originalLink = fs.linkSync;
