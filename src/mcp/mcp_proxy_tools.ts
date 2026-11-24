@@ -232,7 +232,7 @@ export function createMcpServer(
         'eide_get_inc_dirs',
         {
             title: 'Get include directories',
-            description: 'Get all include directory list used for build (JSON array).',
+            description: 'Get the target include directories that eide_set_inc_dirs replaces (JSON array). Dependency and toolchain include paths are not included.',
             inputSchema: { uid: uidSchema }
         },
         async (args) => delegateToolCall('eide_get_inc_dirs', args)
@@ -255,7 +255,7 @@ export function createMcpServer(
         'eide_get_defines',
         {
             title: 'Get preprocessor defines',
-            description: 'Get all preprocessor macro defines used for build (JSON array).',
+            description: 'Get the target preprocessor defines that eide_set_defines replaces (JSON array). Dependency and toolchain defines are not included.',
             inputSchema: { uid: uidSchema }
         },
         async (args) => delegateToolCall('eide_get_defines', args)

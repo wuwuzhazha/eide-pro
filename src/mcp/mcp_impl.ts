@@ -25,7 +25,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types';
 import { ProjectExplorer } from '../EIDEProjectExplorer';
 import { AbstractProject } from '../EIDEProject';
-import { BuilderOptions } from '../EIDETypeDefine';
+import { BuilderOptions, ProjectConfiguration } from '../EIDETypeDefine';
 import { BuildOptions } from '../CodeBuilder';
 import { FlashCommandResult } from '../HexUploader';
 import { loadBuilderOptionsSchema, validateBuilderOptions } from './mcp_builder_opts_validate';
@@ -71,6 +71,11 @@ function makeJsonResult(data: unknown, isError = false): CallToolResult {
         isError,
         content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
     };
+}
+
+function readCustomDependence(prj: AbstractProject) {
+    return prj.GetConfiguration().GetDependence(
+        ProjectConfiguration.CUSTOM_GROUP_NAME, 'default');
 }
 
 function makeBuildResult(prj: AbstractProject, success: boolean, message: string): CallToolResult {
@@ -273,8 +278,8 @@ export async function executeTool(
             const prj = resolveProject(explorer, uid);
             if (!prj)
                 return projectNotFound(uid);
-            const depMerge = prj.GetConfiguration().GetAllMergeDep();
-            const incList = depMerge.incList.map(p => {
+            const dep = readCustomDependence(prj);
+            const incList = (dep ? dep.incList : []).map(p => {
                 const rel = prj.toRelativePath(p);
                 return rel !== undefined ? rel : p;
             });
@@ -297,8 +302,8 @@ export async function executeTool(
             const prj = resolveProject(explorer, uid);
             if (!prj)
                 return projectNotFound(uid);
-            const depMerge = prj.GetConfiguration().GetAllMergeDep();
-            return makeJsonResult(depMerge.defineList);
+            const dep = readCustomDependence(prj);
+            return makeJsonResult(dep ? dep.defineList : []);
         }
         case 'eide_set_defines': {
             const prj = resolveProject(explorer, uid);
