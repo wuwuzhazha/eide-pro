@@ -16,6 +16,7 @@ export interface HeadlessTemplate {
 }
 
 const CURRENT_CONFIG_VERSION = '4.1';
+const TEMPLATE_EXTRACT_TIMEOUT_MS = 120_000;
 
 export const HEADLESS_TEMPLATES: readonly HeadlessTemplate[] = [
     { name: 'mcs51_sdcc', type: 'C51', description: '8051 Quick Start (SDCC)' },
@@ -81,7 +82,11 @@ function extractTemplate(templateFile: string, targetDir: string, resourcesDir: 
     fs.mkdirSync(targetDir, { recursive: true });
     const result = child_process.execFileSync(sevenZipExecutable(resourcesDir), [
         'x', '-y', '-r', '-aoa', templateFile, `-o${targetDir}`
-    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    ], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: TEMPLATE_EXTRACT_TIMEOUT_MS
+    });
     if (result === undefined) {
         fail(`Failed to extract template: ${templateFile}`);
     }

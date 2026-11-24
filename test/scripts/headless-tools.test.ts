@@ -145,6 +145,28 @@ async function run(): Promise<void> {
         additionalProperties: true
     }));
 
+    const watchdogRunner = new FakeRunner();
+    const watchdogExecute = createHeadlessToolExecutor({
+        projectPaths: [root],
+        resourcesDir: resources,
+        toolchainPath: toolchain,
+        buildTimeoutMs: 10000,
+        flashTimeoutMs: 10000,
+        toolWatchdogMs: 50,
+        runner: watchdogRunner,
+        toolRunner: {
+            execute: async (tool: string) => tool === 'eide_build'
+                ? new Promise(() => undefined)
+                : { isError: false, content: [{ type: 'text', text: '{}' }] }
+        }
+    });
+    const watchdogResult = await watchdogExecute('eide_build', { uid: 'project-uid' });
+    assert(watchdogResult.isError === true, 'headless: watchdog rejects a stuck tool');
+    const watchdogError = parse(watchdogResult);
+    assert(watchdogError.error.kind === 'timeout', 'headless: watchdog reports timeout kind');
+    const afterWatchdog = await watchdogExecute('eide_get_targets', { uid: 'project-uid' });
+    assert(afterWatchdog.isError !== true, 'headless: queue continues after watchdog timeout');
+
     const execute = createHeadlessToolExecutor({
         projectPaths: [root],
         resourcesDir: resources,

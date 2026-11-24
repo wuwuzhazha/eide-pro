@@ -13,6 +13,13 @@ import { MiSpawn } from '../core/debug/mi';
 import { HeadlessDebugSession } from './headless_debug';
 import { HeadlessProject } from './headless_project';
 
+const DEFAULT_TOOL_WATCHDOG_MS = 120_000;
+const TOOL_TIMEOUT_GRACE_MS = 30_000;
+
+export interface HeadlessToolExecutorRunner {
+    execute(tool: string, args: Record<string, unknown>): Promise<CallToolResult>;
+}
+
 export interface HeadlessToolOptions {
     projectPaths: string[];
     target?: string;
@@ -30,6 +37,8 @@ export interface HeadlessToolOptions {
     debugSpawn?: MiSpawn;
     debugCommandTimeoutMs?: number;
     debugStopTimeoutMs?: number;
+    toolWatchdogMs?: number;
+    toolRunner?: HeadlessToolExecutorRunner;
 }
 
 function makeTextResult(success: boolean, message: string): CallToolResult {
@@ -48,6 +57,18 @@ function makeJsonResult(data: unknown, isError = false): CallToolResult {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function toolWatchdogTimeout(tool: string, args: Record<string, unknown>, options: HeadlessToolOptions): number {
+    if (options.toolWatchdogMs !== undefined) {
+        return options.toolWatchdogMs;
+    }
+    const ownTimeout = tool === 'eide_build' || tool === 'eide_rebuild'
+        ? options.buildTimeoutMs
+        : tool === 'eide_flash' ? options.flashTimeoutMs
+            : tool.startsWith('eide_debug_') && typeof args.stopTimeoutMs === 'number'
+                ? args.stopTimeoutMs : undefined;
+    return ownTimeout === undefined ? DEFAULT_TOOL_WATCHDOG_MS : ownTimeout + TOOL_TIMEOUT_GRACE_MS;
 }
 
 function readPositiveInt(value: unknown, fallback: number, max: number, name: string): number {
@@ -337,12 +358,38 @@ class HeadlessToolRunner {
 export function createHeadlessToolExecutor(
     options: HeadlessToolOptions
 ): (tool: string, args: Record<string, unknown>) => Promise<CallToolResult> {
-    const runner = new HeadlessToolRunner(options);
+    const runner = options.toolRunner ?? new HeadlessToolRunner(options);
     let queue: Promise<void> = Promise.resolve();
     return (tool, args) => {
         const execution = queue.then(async () => {
             try {
-                return await runner.execute(tool, args);
+                let timer: NodeJS.Timeout | undefined;
+                try {
+                    return await Promise.race([
+                        runner.execute(tool, args),
+                        new Promise<CallToolResult>(resolve => {
+                            timer = setTimeout(() => {
+                                resolve({
+                                    isError: true,
+                                    content: [{
+                                        type: 'text',
+                                        text: JSON.stringify({
+                                            success: false,
+                                            error: {
+                                                kind: 'timeout',
+                                                message: `Tool call timed out: ${tool}`
+                                            }
+                                        })
+                                    }]
+                                });
+                            }, toolWatchdogTimeout(tool, args, options));
+                        })
+                    ]);
+                } finally {
+                    if (timer !== undefined) {
+                        clearTimeout(timer);
+                    }
+                }
             } catch (error) {
                 return makeTextResult(false, errorMessage(error));
             }
