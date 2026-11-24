@@ -28,6 +28,8 @@ const TOOLCHAIN_SETTING_KEYS: { [key: string]: string } = {
     'MIPS:MTI_GCC': 'MIPS.InstallDirectory'
 };
 
+const FILE_SETTING_KEYS = new Set(['C51.INI.Path']);
+
 export interface HeadlessHostOptions {
     projectPath: string;
     workspaceFile?: string;
@@ -142,9 +144,9 @@ function applyToolchainPath(
         return;
     }
     const stat = fs.statSync(toolchainPath, { throwIfNoEntry: false });
-    if (!stat || !stat.isDirectory()) {
-            throw new ConfigError(
-            `--toolchain-path does not exist or is not a directory: ${toolchainPath}`);
+    if (!stat) {
+        throw new ConfigError(
+            `--toolchain-path does not exist: ${toolchainPath}`);
     }
     const targetConfig = config.targets[target];
     const type = String(config.type || '');
@@ -154,6 +156,15 @@ function applyToolchainPath(
             throw new ConfigError(
             `--toolchain-path is not mapped for project type '${type}' and toolchain '${toolchain}'; ` +
             'use --settings with the toolchain install directory.');
+    }
+    if (FILE_SETTING_KEYS.has(key)) {
+        if (!stat.isFile()) {
+            throw new ConfigError(
+                `--toolchain-path must be the TOOLS.INI file for toolchain '${toolchain}': ${toolchainPath}`);
+        }
+    } else if (!stat.isDirectory()) {
+        throw new ConfigError(
+            `--toolchain-path is not a directory for toolchain '${toolchain}': ${toolchainPath}`);
     }
     settings[key] = toolchainPath;
 }
