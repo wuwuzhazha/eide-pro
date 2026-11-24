@@ -13,6 +13,7 @@ import { BuildPlan, BuildService, CleanResult } from '../core/services';
 import { BuildRequest, BuildResult, EffectiveBuildConfig } from '../core/types';
 import { detectBuildStage, makeLogTail, parseMemoryUsage } from '../BuildReport';
 import { HeadlessHostOptions, openHeadlessProject } from './host';
+import { selectBuilderOptionsSchema } from '../core/builder_options_schema_view';
 
 export interface EideBuildServiceOptions {
     resourcesDir: string;
@@ -238,10 +239,11 @@ export class EideBuildService implements BuildService {
         }
     }
 
-    async getBuilderOptionsSchema(request: ProjectRequest): Promise<object> {
+    async getBuilderOptionsSchema(request: ProjectRequest, path?: string): Promise<object> {
         const session = await openHeadlessProject(this.hostOptions(request));
         try {
-            return builderOptionsApi().loadBuilderOptionsSchema(session.project);
+            return selectBuilderOptionsSchema(
+                builderOptionsApi().loadBuilderOptionsSchema(session.project), path);
         } finally {
             session.close();
         }

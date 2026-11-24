@@ -52,10 +52,6 @@ function makeToolResult(data: unknown, isError = false): CallToolResult {
     };
 }
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
-
 function toolWatchdogTimeout(tool: string, args: Record<string, unknown>, options: HeadlessToolOptions): number {
     if (options.toolWatchdogMs !== undefined) {
         return options.toolWatchdogMs;
@@ -290,7 +286,8 @@ class HeadlessToolRunner {
             }
             case 'eide_get_builder_opts_schema':
                 return makeToolResult(
-                    await this.builder.getBuilderOptionsSchema(this.projectRequest(project)));
+                    await this.builder.getBuilderOptionsSchema(
+                        this.projectRequest(project), readOptionalString(args.path, 'path')));
             case 'eide_get_builder_opts':
                 return makeToolResult(await this.builder.getBuilderOptions(
                     this.projectRequest(project)));
@@ -390,7 +387,7 @@ export function createHeadlessToolExecutor(
                     }
                 }
             } catch (error) {
-                return makeToolResult({ message: errorMessage(error) }, true);
+                return makeToolResult(classifyError(error, null), true);
             }
         });
         queue = execution.then(() => undefined, () => undefined);

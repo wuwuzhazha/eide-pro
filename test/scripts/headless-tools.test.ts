@@ -217,7 +217,15 @@ async function run(): Promise<void> {
     assert(data.join('|') === 'A=1|B=2', 'headless: defines list');
 
     result = await execute('eide_get_builder_opts_schema', { uid: 'project-uid' });
-    assert(parse(result).type === 'object', 'headless: builder options schema');
+    const schemaTop = parse(result);
+    assert(typeof schemaTop === 'object' && schemaTop.global !== undefined,
+        'headless: builder options schema top-level keys');
+
+    result = await execute('eide_get_builder_opts_schema', {
+        uid: 'project-uid',
+        path: 'global'
+    });
+    assert(typeof parse(result) === 'object', 'headless: builder options schema subtree');
 
     result = await execute('eide_set_builder_opts', {
         uid: 'project-uid',

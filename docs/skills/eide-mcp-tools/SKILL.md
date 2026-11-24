@@ -196,8 +196,9 @@ in the build automatically.
 
 Headless and VS Code MCP both resolve the builder-options schema from the
 project's active toolchain in the extension `lang` directory. `eide_set_builder_opts`
-validates against that schema before saving, so read the schema first and send
-the complete options object.
+validates against that schema before saving, so call `eide_get_builder_opts_schema`
+without `path` first to see the top-level keys, then call it again with the desired
+dot-separated `path` before sending the complete options object.
 
 ## 5. Build analysis
 

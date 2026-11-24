@@ -29,6 +29,7 @@ import { BuilderOptions, ProjectConfiguration } from '../EIDETypeDefine';
 import { BuildOptions } from '../CodeBuilder';
 import { FlashCommandResult } from '../HexUploader';
 import { loadBuilderOptionsSchema, validateBuilderOptions } from './mcp_builder_opts_validate';
+import { selectBuilderOptionsSchema } from '../core/builder_options_schema_view';
 import { File } from '../../lib/node-utility/File';
 import { parseCompilerLog } from '../ProblemMatcher';
 import { BuildProblem, detectBuildStage, makeLogTail, parseMemoryUsage, toBuildProblems } from '../BuildReport';
@@ -336,7 +337,9 @@ export async function executeTool(
             if (!prj)
                 return projectNotFound(uid);
             try {
-                return makeJsonResult(loadBuilderOptionsSchema(prj));
+                const path = args.path === undefined || args.path === null
+                    ? undefined : String(args.path);
+                return makeJsonResult(selectBuilderOptionsSchema(loadBuilderOptionsSchema(prj), path));
             } catch (err) {
                 const error = err instanceof Error ? err : new Error(String(err));
                 return makeTextResult(false, 'Failed to load builder options schema.', error);

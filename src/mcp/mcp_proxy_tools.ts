@@ -285,8 +285,12 @@ export function createMcpServer(
         'eide_get_builder_opts_schema',
         {
             title: 'Get builder options schema',
-            description: 'Get JSON schema for builder options of the project toolchain.',
-            inputSchema: { uid: uidSchema }
+            description: 'Get builder options schema. Without path, returns only top-level keys and descriptions. With path, returns the full schema for that subtree. Use dot-separated keys; a key containing "/" is one segment, e.g. "c/cpp-compiler.optimization".',
+            inputSchema: {
+                uid: uidSchema,
+                path: z.string().optional().describe(
+                    'Optional dot-separated schema path, e.g. "c/cpp-compiler" or "global.optimization".')
+            }
         },
         async (args) => delegateToolCall('eide_get_builder_opts_schema', args)
     );
