@@ -8,6 +8,9 @@ import type { ProcessRunner } from './adapters';
 import { CliUsageError } from '../cli/args';
 import { BuildExecutionError } from './build_service';
 import { FlashBuildError } from './flash/builders';
+import { ConfigError } from './errors';
+
+export { ConfigError } from './errors';
 
 export type CommandName = 'clean' | 'flash';
 export type FailureKind = 'timeout' | 'signal' | 'build';
@@ -41,13 +44,6 @@ export interface ProjectCommandRequest {
 
 export interface CleanCommandRequest extends ProjectCommandRequest {
     command: 'clean';
-}
-
-export class ConfigError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'ConfigError';
-    }
 }
 
 export function classifyError(error: unknown, command: CommandName | string | null): CommandFailure {

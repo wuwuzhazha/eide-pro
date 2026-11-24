@@ -3,7 +3,7 @@ import * as NodePath from 'path';
 import { loadProjectSnapshot, ProjectSnapshot, resolveOutputDir } from './project_snapshot';
 import { CleanResult } from './services';
 import { BuildRequest } from './types';
-import { ConfigError } from './command_kernel';
+import { ConfigError } from './errors';
 
 export class BuildExecutionError extends Error {
     constructor(message: string, public readonly original: unknown) {

@@ -10,7 +10,8 @@ import { BuildOverrides } from '../core/types';
 import { MiSpawn } from '../core/debug/mi';
 import { HeadlessDebugSession } from './headless_debug';
 import { HeadlessProject } from './headless_project';
-import { classifyError, ConfigError, createCommandKernel, CommandResult } from '../core/command_kernel';
+import { classifyError, createCommandKernel, CommandResult } from '../core/command_kernel';
+import { ConfigError } from '../core/errors';
 
 const DEFAULT_TOOL_WATCHDOG_MS = 120_000;
 const TOOL_TIMEOUT_GRACE_MS = 30_000;
@@ -40,22 +41,15 @@ export interface HeadlessToolOptions {
     toolRunner?: HeadlessToolExecutorRunner;
 }
 
-function makeTextResult(success: boolean, message: string): CallToolResult {
+function makeToolResult(data: unknown, isError = false): CallToolResult {
+    const envelope = data && typeof data === 'object' && 'success' in data
+        ? data as Record<string, unknown>
+        : { value: data };
     return {
-        isError: !success,
-        content: [{ type: 'text', text: message }]
+        isError: envelope.success === false ? true : isError,
+        structuredContent: envelope,
+        content: [{ type: 'text', text: JSON.stringify(data) }]
     };
-}
-
-function makeJsonResult(data: unknown, isError = false): CallToolResult {
-    return {
-        isError,
-        content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
-    };
-}
-
-function makeEnvelopeResult(envelope: CommandResult<unknown>): CallToolResult {
-    return makeJsonResult(envelope, !envelope.success);
 }
 
 function errorMessage(error: unknown): string {
@@ -184,7 +178,7 @@ class HeadlessToolRunner {
         try {
             project = this.resolveProject(uid);
         } catch (error) {
-            return makeEnvelopeResult(classifyError(error, tool === 'eide_clean' ? 'clean' : null));
+            return makeToolResult(classifyError(error, tool === 'eide_clean' ? 'clean' : null));
         }
 
         switch (tool) {
@@ -193,7 +187,7 @@ class HeadlessToolRunner {
                 const overrides = args.overrides as BuildOverrides | undefined;
                 const overrideError = validateBuildOverrides(overrides);
                 if (overrideError) {
-                    return makeTextResult(false, `Invalid overrides: ${overrideError}`);
+                    return makeToolResult({ message: `Invalid overrides: ${overrideError}` }, true);
                 }
                 const request = {
                     projectPath: project.projectPath,
@@ -203,8 +197,9 @@ class HeadlessToolRunner {
                 };
                 if (args.dryRun === true) {
                     const plan = await this.builder.plan(request);
-                    return makeJsonResult({
+                    return makeToolResult({
                         success: true,
+                        command: tool,
                         dryRun: true,
                         configHash: plan.configHash,
                         outDir: plan.outDir,
@@ -215,14 +210,18 @@ class HeadlessToolRunner {
                     });
                 }
                 const result = await this.builder.build(request);
-                return makeJsonResult(result, !result.success);
+                return makeToolResult({
+                    ...result,
+                    command: tool,
+                    success: result.success
+                }, !result.success);
             }
             case 'eide_clean': {
                 const result = await this.kernel.clean({
                     command: 'clean',
                     ...this.projectRequest(project)
                 });
-                return makeEnvelopeResult(result);
+                return makeToolResult(result);
             }
             case 'eide_flash': {
                 const artifact = readOptionalString(args.artifact, 'artifact');
@@ -241,122 +240,122 @@ class HeadlessToolRunner {
                     artifact,
                     dryRun
                 });
-                return makeEnvelopeResult(result);
+                return makeToolResult(result);
             }
             case 'eide_reload':
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_get_targets':
-                return makeJsonResult({
+                return makeToolResult({
                     actived: project.getTargetName(),
                     targets: project.getTargetNames()
                 });
             case 'eide_switch_target': {
                 const targetName = typeof args.targetName === 'string' ? args.targetName : '';
                 project.selectTarget(targetName);
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             }
             case 'eide_get_src_dirs':
-                return makeJsonResult(project.getSrcDirs());
+                return makeToolResult(project.getSrcDirs());
             case 'eide_add_src_dir':
                 project.addSrcDir(String(args.path));
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_del_src_dir':
                 project.removeSrcDir(String(args.path));
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_exclude_src_file':
                 project.excludeSourceFile(String(args.path));
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_include_src_file':
                 project.includeSourceFile(String(args.path));
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_get_inc_dirs':
-                return makeJsonResult(project.getIncludeDirs());
+                return makeToolResult(project.getIncludeDirs());
             case 'eide_set_inc_dirs': {
                 const paths = args.paths;
                 if (!Array.isArray(paths)) {
-                    return makeTextResult(false, 'paths must be an array of strings.');
+                    return makeToolResult({ message: 'paths must be an array of strings.' }, true);
                 }
                 project.setIncludeDirs(paths as string[]);
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             }
             case 'eide_get_defines':
-                return makeJsonResult(project.getDefines());
+                return makeToolResult(project.getDefines());
             case 'eide_set_defines': {
                 const defines = args.defines;
                 if (!Array.isArray(defines)) {
-                    return makeTextResult(false, 'defines must be an array of strings.');
+                    return makeToolResult({ message: 'defines must be an array of strings.' }, true);
                 }
                 project.setDefines(defines as string[]);
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             }
             case 'eide_get_builder_opts_schema':
-                return makeJsonResult(
+                return makeToolResult(
                     await this.builder.getBuilderOptionsSchema(this.projectRequest(project)));
             case 'eide_get_builder_opts':
-                return makeJsonResult(await this.builder.getBuilderOptions(
+                return makeToolResult(await this.builder.getBuilderOptions(
                     this.projectRequest(project)));
             case 'eide_set_builder_opts':
                 await this.builder.setBuilderOptions(
                     this.projectRequest(project), args.options);
-                return makeTextResult(true, 'Succeed.');
+                return makeToolResult({ message: 'Succeed.' });
             case 'eide_get_stack_usage': {
                 const topN = readPositiveInt(args.topN, 20, 500, 'topN');
                 const stats = readBuildStatistics(project);
-                return makeJsonResult(summarizeStackUsage(stats.stackusage, topN));
+                return makeToolResult(summarizeStackUsage(stats.stackusage, topN));
             }
             case 'eide_query_callgraph': {
                 const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : '';
                 if (symbol.length === 0) {
-                    return makeTextResult(false, "Params 'symbol' cannot be empty.");
+                    return makeToolResult({ message: "Params 'symbol' cannot be empty." }, true);
                 }
                 const depth = readPositiveInt(args.depth, 2, 6, 'depth');
                 const stats = readBuildStatistics(project);
-                return makeJsonResult(queryCallgraph(stats.callgraph, symbol, depth));
+                return makeToolResult(queryCallgraph(stats.callgraph, symbol, depth));
             }
             case 'eide_debug_connect':
-                return makeJsonResult(await this.debug.connect(project, args));
+                return makeToolResult(await this.debug.connect(project, args));
             case 'eide_debug_disconnect':
-                return makeJsonResult(await this.debug.disconnect());
+                return makeToolResult(await this.debug.disconnect());
             case 'eide_debug_read_register':
-                return makeJsonResult(await this.debug.readRegister(args.name));
+                return makeToolResult(await this.debug.readRegister(args.name));
             case 'eide_debug_read_memory':
-                return makeJsonResult(await this.debug.readMemory(args.address, args.length));
+                return makeToolResult(await this.debug.readMemory(args.address, args.length));
             case 'eide_debug_write_memory':
-                return makeJsonResult(await this.debug.writeMemory(args.address, args.hex));
+                return makeToolResult(await this.debug.writeMemory(args.address, args.hex));
             case 'eide_debug_set_breakpoint':
-                return makeJsonResult(await this.debug.setBreakpoint(args));
+                return makeToolResult(await this.debug.setBreakpoint(args));
             case 'eide_debug_remove_breakpoint':
-                return makeJsonResult(await this.debug.removeBreakpoint(args.id));
+                return makeToolResult(await this.debug.removeBreakpoint(args.id));
             case 'eide_debug_backtrace':
-                return makeJsonResult(await this.debug.backtrace(args.maxDepth));
+                return makeToolResult(await this.debug.backtrace(args.maxDepth));
             case 'eide_debug_list_breakpoints':
-                return makeJsonResult(await this.debug.listBreakpoints());
+                return makeToolResult(await this.debug.listBreakpoints());
             case 'eide_debug_list_threads':
-                return makeJsonResult(await this.debug.listThreads());
+                return makeToolResult(await this.debug.listThreads());
             case 'eide_debug_select_thread':
-                return makeJsonResult(await this.debug.selectThread(args.id));
+                return makeToolResult(await this.debug.selectThread(args.id));
             case 'eide_debug_select_frame':
-                return makeJsonResult(await this.debug.selectFrame(args.level));
+                return makeToolResult(await this.debug.selectFrame(args.level));
             case 'eide_debug_list_variables':
-                return makeJsonResult(await this.debug.listVariables(args));
+                return makeToolResult(await this.debug.listVariables(args));
             case 'eide_debug_continue':
-                return makeJsonResult(await this.debug.continue(args.stopTimeoutMs));
+                return makeToolResult(await this.debug.continue(args.stopTimeoutMs));
             case 'eide_debug_step_over':
-                return makeJsonResult(await this.debug.stepOver(args.stopTimeoutMs));
+                return makeToolResult(await this.debug.stepOver(args.stopTimeoutMs));
             case 'eide_debug_step_into':
-                return makeJsonResult(await this.debug.stepInto(args.stopTimeoutMs));
+                return makeToolResult(await this.debug.stepInto(args.stopTimeoutMs));
             case 'eide_debug_step_out':
-                return makeJsonResult(await this.debug.stepOut(args.stopTimeoutMs));
+                return makeToolResult(await this.debug.stepOut(args.stopTimeoutMs));
             case 'eide_debug_interrupt':
-                return makeJsonResult(await this.debug.interrupt());
+                return makeToolResult(await this.debug.interrupt());
             case 'eide_debug_evaluate':
-                return makeJsonResult(await this.debug.evaluate(args.expression));
+                return makeToolResult(await this.debug.evaluate(args.expression));
             case 'eide_debug_fault':
-                return makeJsonResult(await this.debug.fault(args));
+                return makeToolResult(await this.debug.fault(args));
             case 'eide_debug_svd_lookup':
-                return makeJsonResult(await this.debug.svdLookup(project, args));
+                return makeToolResult(await this.debug.svdLookup(project, args));
             default:
-                return makeTextResult(false, `Unknown tool: ${tool}`);
+                return makeToolResult({ message: `Unknown tool: ${tool}` }, true);
         }
     }
 }
@@ -375,19 +374,13 @@ export function createHeadlessToolExecutor(
                         runner.execute(tool, args),
                         new Promise<CallToolResult>(resolve => {
                             timer = setTimeout(() => {
-                                resolve({
-                                    isError: true,
-                                    content: [{
-                                        type: 'text',
-                                        text: JSON.stringify({
-                                            success: false,
-                                            error: {
-                                                kind: 'timeout',
-                                                message: `Tool call timed out: ${tool}`
-                                            }
-                                        })
-                                    }]
-                                });
+                                resolve(makeToolResult({
+                                    success: false,
+                                    error: {
+                                        kind: 'timeout',
+                                        message: `Tool call timed out: ${tool}`
+                                    }
+                                }, true));
                             }, toolWatchdogTimeout(tool, args, options));
                         })
                     ]);
@@ -397,7 +390,7 @@ export function createHeadlessToolExecutor(
                     }
                 }
             } catch (error) {
-                return makeTextResult(false, errorMessage(error));
+                return makeToolResult({ message: errorMessage(error) }, true);
             }
         });
         queue = execution.then(() => undefined, () => undefined);
@@ -412,3 +405,5 @@ export async function executeHeadlessTool(
 ): Promise<CallToolResult> {
     return createHeadlessToolExecutor(options)(tool, args);
 }
+
+

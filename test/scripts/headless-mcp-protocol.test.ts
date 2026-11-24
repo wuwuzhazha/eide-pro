@@ -129,6 +129,14 @@ async function run(): Promise<void> {
             arguments: { uid: 'protocol-uid' }
         });
         assert(parse(result).join('|') === 'src', 'protocol: get source dirs');
+
+        result = await client.callTool({
+            name: 'eide_clean',
+            arguments: { uid: 'protocol-uid' }
+        });
+        assert((result as any).structuredContent.command === 'clean'
+            && JSON.stringify(parse(result)) === JSON.stringify((result as any).structuredContent),
+            'protocol: clean returns matching structuredContent envelope');
     } finally {
         await client.close();
     }

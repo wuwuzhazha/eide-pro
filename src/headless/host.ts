@@ -10,7 +10,7 @@ import { findExtensionRoot, loadHeadlessSettings } from './settings';
 import { ensureBundledToolPermissions } from './tool_permissions';
 import { EXTENSION_ID } from '../ExtensionInfo';
 import { installVscodeShim } from './vscode';
-import { ConfigError } from '../core/command_kernel';
+import { ConfigError } from '../core/errors';
 
 const TOOLCHAIN_SETTING_KEYS: { [key: string]: string } = {
     'ARM:GCC': 'ARM.GCC.InstallDirectory',
