@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { classifyError, createCommandKernel } from '../core/command_kernel';
+import { classifyError, createCommandKernel, ErrorKind } from '../core/command_kernel';
 import { EideBuildService } from '../headless/build_service';
 import { StderrLogger } from '../core/logger';
 import { NodeProcessRunner } from '../core/process_runner';
@@ -49,15 +49,21 @@ export function errorPayload(
     };
 }
 
-function exitCodeFor(result: unknown): number {
-    const value = result as { success?: boolean; error?: { kind?: string } };
-    if (value.success === true) {
+const ERROR_EXIT_CODE: Record<ErrorKind, 3 | 4> = {
+    usage: 3,
+    config: 3,
+    tool: 4,
+    internal: 4
+};
+
+function exitCodeFor(result: { success: boolean; error?: { kind: ErrorKind } }): number {
+    if (result.success) {
         return 0;
     }
-    if (value.error) {
-        return value.error.kind === 'usage' || value.error.kind === 'config' ? 3 : 4;
+    if (result.error) {
+        return ERROR_EXIT_CODE[result.error.kind];
     }
-    return value.success === false ? 2 : 3;
+    return 2;
 }
 
 export async function main(argv: string[], io: CliIo = processIo): Promise<number> {
@@ -140,7 +146,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
                 paramsFile: plan.paramsPath,
                 params: plan.params
             });
-            return exitCodeFor({ success: true });
+            return 0;
         }
 
         const result = await service.build(request);

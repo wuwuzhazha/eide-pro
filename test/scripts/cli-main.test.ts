@@ -117,9 +117,9 @@ async function run(): Promise<void> {
     text = io();
     code = await main(['build', '--project', root], text);
     const missingEnvironment = JSON.parse(text.out());
-    assert(code === 4 && missingEnvironment.error.kind === 'internal'
+    assert(code === 3 && missingEnvironment.error.kind === 'config'
         && text.err().includes('--resources'),
-        'cli: missing environment is an internal error');
+        'cli: missing environment is a config error');
 
     text = io();
     const missingToolchain = NodePath.join(root, 'no-such-toolchain');
