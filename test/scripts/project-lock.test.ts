@@ -1,4 +1,4 @@
-import * as FileLock from '../../lib/node-utility/FileLock';
+import * as ProjectLock from '../../src/core/project_lock';
 
 const fs = require('fs');
 const os = require('os');
@@ -13,7 +13,7 @@ function assert(cond: boolean, msg: string): asserts cond {
     console.log('OK:', msg);
 }
 
-const root = NodePath.join(os.tmpdir(), `eide-file-lock-${process.pid}-${Date.now()}`);
+const root = NodePath.join(os.tmpdir(), `eide-project-lock-${process.pid}-${Date.now()}`);
 fs.mkdirSync(root, { recursive: true });
 
 function lockPath(name: string): string {
@@ -27,16 +27,15 @@ interface ChildLockResult {
 }
 
 function startChildLock(path: string): ChildLockResult {
-    const modulePath = NodePath.join(__dirname, '..', '..', 'lib', 'node-utility', 'FileLock.js');
+    const modulePath = NodePath.join(__dirname, '..', '..', 'src', 'core', 'project_lock.js');
     const script = `
-        const FileLock = require(${JSON.stringify(modulePath)});
-        try {
-            FileLock.lock(${JSON.stringify(path)});
-            process.stdout.write('LOCKED\\n');
-        } catch (error) {
+        const ProjectLock = require(${JSON.stringify(modulePath)});
+        const fd = ProjectLock.acquireProjectLock(${JSON.stringify(path)});
+        if (fd === undefined) {
             process.stdout.write('REJECTED\\n');
             process.exit(0);
         }
+        process.stdout.write('LOCKED\\n');
         process.stdin.resume();
         process.stdin.on('end', () => process.exit(0));
     `;
@@ -73,24 +72,30 @@ async function run(): Promise<void> {
     {
         const path = lockPath('live-owner');
         fs.writeFileSync(path, String(process.pid));
+        assert(ProjectLock.acquireProjectLock(path) === undefined,
+            'lock: returns undefined for a lock held by a live process');
+    }
+
+    {
+        const path = lockPath('broken-owner');
+        fs.writeFileSync(path, 'not-a-pid');
         let message = '';
         try {
-            FileLock.lock(path);
+            ProjectLock.acquireProjectLock(path);
         } catch (error) {
             message = error.message;
         }
-        assert(message.includes(String(process.pid)) && message.includes(path),
-            'lock: rejects a lock held by a live process');
+        assert(message.includes(path), 'lock: throws when the holder pid cannot be read');
     }
 
     {
         const path = lockPath('dead-owner');
         fs.writeFileSync(path, '999999');
-        const fd = FileLock.lock(path);
+        const fd = ProjectLock.acquireProjectLock(path);
         assert(typeof fd === 'number', 'lock: steals a lock from a dead process');
         assert(fs.readFileSync(path, 'utf8') === String(process.pid),
             'lock: writes own pid into the lock file');
-        assert(FileLock.unlock(fd) === true, 'unlock: releases by fd');
+        assert(ProjectLock.releaseProjectLock(fd) === true, 'unlock: releases by fd');
         assert(!fs.existsSync(path), 'unlock: removes the lock file it owns');
     }
 
@@ -107,7 +112,7 @@ async function run(): Promise<void> {
 
 run()
     .then(() => {
-        console.log('All file lock tests passed.');
+        console.log('All project lock tests passed.');
     })
     .catch(error => {
         console.error(error);

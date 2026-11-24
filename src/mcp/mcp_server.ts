@@ -31,7 +31,7 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types';
 import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types';
-import * as FileLock from '../../lib/node-utility/FileLock';
+import { acquireProjectLock, releaseProjectLock } from '../core/project_lock';
 import { File } from '../../lib/node-utility/File';
 import { createMcpServer } from './mcp_proxy_tools';
 import {
@@ -209,7 +209,7 @@ async function main(): Promise<void> {
         fs.mkdirSync(mcpDir, { recursive: true });
     }
 
-    const lockFd = FileLock.lock(lockPath);
+    const lockFd = acquireProjectLock(lockPath);
     if (lockFd === undefined) {
         process.exit(1);
     }
@@ -238,7 +238,7 @@ async function main(): Promise<void> {
         }
         ipcServer?.close();
         httpServer?.close();
-        FileLock.unlock(lockFd);
+        releaseProjectLock(lockFd);
     };
 
     try {
@@ -441,10 +441,10 @@ async function main(): Promise<void> {
 
     process.on('SIGINT', () => void cleanup().then(() => process.exit(0)));
     process.on('SIGTERM', () => void cleanup().then(() => process.exit(0)));
-    process.on('exit', () => FileLock.unlock(lockFd));
+    process.on('exit', () => releaseProjectLock(lockFd));
     } catch (err) {
         logError('MCP proxy startup failed', err);
-        FileLock.unlock(lockFd);
+        releaseProjectLock(lockFd);
         process.exit(1);
     }
 }

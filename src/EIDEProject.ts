@@ -83,7 +83,7 @@ import { jsonc } from 'jsonc';
 import * as iconv from 'iconv-lite';
 import * as globmatch from 'micromatch'
 import { EventData, CurrentDevice, ArmBaseCompileConfigModel, ArmBaseCompileData } from './EIDEProjectModules';
-import * as FileLock from '../lib/node-utility/FileLock';
+import { acquireProjectLock, releaseProjectLock } from './core/project_lock';
 import { CompilerCommandsDatabaseItem, CodeBuilder } from './CodeBuilder';
 import { xpackRequireDevTools } from './XpackDevTools';
 import { EXTENSION_DISPLAY_NAME, EXTENSION_ID, LEGACY_EXTENSION_IDS } from './ExtensionInfo';
@@ -1456,7 +1456,7 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
 
     async Load(wsFile: File) {
 
-        this.lock_handle = FileLock.lock([os.tmpdir(), `${md5(wsFile.path)}.lock`].join(NodePath.sep));
+        this.lock_handle = acquireProjectLock([os.tmpdir(), `${md5(wsFile.path)}.lock`].join(NodePath.sep));
         if (this.lock_handle == undefined) {
             throw new Error(view_str$prompt$project_is_opened_by_another.replace('{path}', wsFile.path));
         }
@@ -1468,7 +1468,7 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
             await this.AfterLoad();
         } catch (error) {
             if (this.lock_handle)
-                FileLock.unlock(this.lock_handle);
+                releaseProjectLock(this.lock_handle);
             throw error;
         }
     }
@@ -1476,7 +1476,7 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
     async LoadForHeadless(wsFile: File): Promise<void> {
 
         this.headless = true;
-        this.lock_handle = FileLock.lock([os.tmpdir(), `${md5(wsFile.path)}.lock`].join(NodePath.sep));
+        this.lock_handle = acquireProjectLock([os.tmpdir(), `${md5(wsFile.path)}.lock`].join(NodePath.sep));
         if (this.lock_handle == undefined) {
             throw new Error(view_str$prompt$project_is_opened_by_another.replace('{path}', wsFile.path));
         }
@@ -1492,14 +1492,14 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
             this.GetConfiguration().BuildIn_RemoveAllDefines();
         } catch (error) {
             if (this.lock_handle)
-                FileLock.unlock(this.lock_handle);
+                releaseProjectLock(this.lock_handle);
             throw error;
         }
     }
 
     Close() {
         if (this.lock_handle)
-            FileLock.unlock(this.lock_handle);
+            releaseProjectLock(this.lock_handle);
         this.clearPendingSave();
         this.dispose();
         this.sourceRoots.DisposeAll();
