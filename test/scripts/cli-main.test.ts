@@ -3,6 +3,13 @@ const os = require('os');
 const NodePath = require('path');
 const yaml = require('yaml');
 const { main } = require('../../../src/cli/main') as any;
+    const missingToolchain = NodePath.join(root, 'no-such-toolchain');
+        '--toolchain-path', missingToolchain], text);
+    assert(code === 3 && text.err().includes(missingToolchain),
+        'cli: invalid toolchain path fails fast');
+
+    text = io();
+    code = await main(['plan', '--project', root, '--resources', resources,
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {

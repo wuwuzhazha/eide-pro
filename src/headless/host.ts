@@ -140,6 +140,11 @@ function applyToolchainPath(
     if (!toolchainPath) {
         return;
     }
+    const stat = fs.statSync(toolchainPath, { throwIfNoEntry: false });
+    if (!stat || !stat.isDirectory()) {
+        throw new Error(
+            `--toolchain-path does not exist or is not a directory: ${toolchainPath}`);
+    }
     const targetConfig = config.targets[target];
     const type = String(config.type || '');
     const toolchain = String(targetConfig.toolchain || '');
