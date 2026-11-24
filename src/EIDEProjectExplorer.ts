@@ -149,6 +149,9 @@ import { StatusBarManager } from './StatusBarManager';
 import { doMigration, detectProject } from './EIDEProjectMigration';
 import { onRegisterClangdProvider } from './clangdConfigProvider';
 import * as hooks from './Hooks';
+import { NodeProcessRunner, ProcessTimeoutError } from './core/process_runner';
+
+const BUILD_PROCESS_TIMEOUT_MS = 280 * 1000;
 
 enum TreeItemType {
     SOLUTION,
@@ -3920,7 +3923,7 @@ export class ProjectExplorer implements CustomConfigurationProvider {
         }
     }
 
-    async buildProject(prj?: AbstractProject, options?: BuildOptions, noTerminal?: boolean): Promise<{ success: boolean; message: string; }> {
+    async buildProject(prj?: AbstractProject, options?: BuildOptions, noTerminal?: boolean): Promise<{ success: boolean; message: string; failureKind?: 'timeout' | 'signal' | 'build'; }> {
 
         if (prj === undefined) {
             GlobalEvent.show_msgbox('Warning', 'No active project !');
@@ -3947,10 +3950,10 @@ export class ProjectExplorer implements CustomConfigurationProvider {
             const builder = CodeBuilder.NewBuilder(prj);
             const toolchain = prj.getToolchain().name;
 
-            const res = await new Promise<{ success: boolean; message: string; }>((resolve) => {
+            const res = await new Promise<{ success: boolean; message: string; failureKind?: 'timeout' | 'signal' | 'build'; }>((resolve) => {
                 if (noTerminal) {
-                    const commandLine = builder.genBuildCommand(options);
-                    if (commandLine) {
+                    const invocation = builder.getBuildInvocation(options);
+                    if (invocation) {
                         // launched
                         if (this.compiler_diags.has(prj.getUid())) {
                             this.compiler_diags.get(prj.getUid())?.clear();
@@ -3959,21 +3962,43 @@ export class ProjectExplorer implements CustomConfigurationProvider {
                         if (buildbar) {
                             buildbar.text = `$(loading~spin) Building`;
                         }
-                        child_process.exec(commandLine, { cwd: prj.getProjectRoot().path }, (error, stdout, stderr) => {
+                        const onBuildDone = (succeeded: boolean) => {
                             prj.notifyUpdateSourceRefs(toolchain);
                             this.notifyUpdateOutputFolder(prj);
                             this.updateCompilerDiagsAfterBuild(prj);
                             this.dataProvider.updateStatusBarForActiveProjects();
-                            hooks.onProjectBuildFinished(prj, error ? false : true);
-                            if (error) {
+                            hooks.onProjectBuildFinished(prj, succeeded);
+                        };
+                        new NodeProcessRunner().run(invocation.file, invocation.args, {
+                            cwd: prj.getProjectRoot().path,
+                            timeoutMs: BUILD_PROCESS_TIMEOUT_MS,
+                            env: process.env
+                        }).then((result) => {
+                            onBuildDone(result.code === 0);
+                            if (result.code === 0) {
                                 resolve({
-                                    success: false,
-                                    message: `Failed.\n\nError: ${error.message}\n\nBuilder log:\n\n${stdout.toString()}`
+                                    success: true,
+                                    message: `Succeed.\n\nBuilder log:\n\n${result.stdout}`
                                 });
                             } else {
                                 resolve({
-                                    success: true,
-                                    message: `Succeed.\n\nBuilder log:\n\n${stdout.toString()}`
+                                    success: false,
+                                    message: `Failed.\n\nError: builder exited with code ${result.code}\n\nBuilder log:\n\n${result.stdout}`,
+                                    failureKind: result.code === null ? 'signal' : 'build'
+                                });
+                            }
+                        }, (error) => {
+                            onBuildDone(false);
+                            if (error instanceof ProcessTimeoutError) {
+                                resolve({
+                                    success: false,
+                                    message: `Failed.\n\nError: ${error.message}\n\nBuilder log:\n\n${error.stdout}`,
+                                    failureKind: 'timeout'
+                                });
+                            } else {
+                                resolve({
+                                    success: false,
+                                    message: `Failed.\n\nError: ${(<Error>error).message}`
                                 });
                             }
                         });

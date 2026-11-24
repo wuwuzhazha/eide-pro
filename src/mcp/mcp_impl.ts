@@ -78,7 +78,12 @@ function readCustomDependence(prj: AbstractProject) {
         ProjectConfiguration.CUSTOM_GROUP_NAME, 'default');
 }
 
-function makeBuildResult(prj: AbstractProject, success: boolean, message: string): CallToolResult {
+function makeBuildResult(
+    prj: AbstractProject,
+    success: boolean,
+    message: string,
+    failureKind?: 'timeout' | 'signal' | 'build'
+): CallToolResult {
     const logFile = File.from(prj.getOutputFolder().path, 'compiler.log');
     let logText = '';
     let problems: BuildProblem[] = [];
@@ -96,6 +101,7 @@ function makeBuildResult(prj: AbstractProject, success: boolean, message: string
     const compileCommands = File.from(prj.getOutputFolder().path, 'compile_commands.json');
     const report = {
         success,
+        ...(failureKind ? { failureKind } : {}),
         stage: detectBuildStage(logText, success),
         problems,
         memory: parseMemoryUsage(logText),
@@ -176,7 +182,7 @@ export async function executeTool(
             if (res.message === 'Builder busy ! Please wait !') {
                 return makeTextResult(false, res.message);
             }
-            return makeBuildResult(prj, res.success, res.message);
+            return makeBuildResult(prj, res.success, res.message, res.failureKind);
         }
         case 'eide_clean': {
             const prj = resolveProject(explorer, uid);
