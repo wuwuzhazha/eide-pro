@@ -16,8 +16,26 @@ function assert(cond: boolean, msg: string): asserts cond {
 const root = NodePath.join(os.tmpdir(), `eide-project-lock-${process.pid}-${Date.now()}`);
 fs.mkdirSync(root, { recursive: true });
 
-function lockPath(name: string): string {
-    return NodePath.join(root, `${name}.lock`);
+function caseDir(name: string): string {
+    const dir = NodePath.join(root, name);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+}
+
+function lockPath(dir: string): string {
+    return NodePath.join(dir, 'project.lock');
+}
+
+function removeDir(dir: string): void {
+    try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    } catch (error) {
+        const remaining = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+        console.error(`CLEANUP FAILED: ${dir}`);
+        console.error(`remaining entries: ${JSON.stringify(remaining)}`);
+        console.error(error);
+        process.exitCode = 1;
+    }
 }
 
 interface ChildLockResult {
@@ -83,7 +101,8 @@ function startChildLock(path: string): ChildLockResult {
     };
 }
 
-async function runChildPair(path: string, message: string): Promise<void> {
+async function runChildPair(dir: string, message: string): Promise<void> {
+    const path = lockPath(dir);
     const children = [startChildLock(path), startChildLock(path)];
     const verdicts = Promise.all(children.map(child => child.verdict));
     const closes = Promise.all(children.map(child => child.closed));
@@ -95,6 +114,7 @@ async function runChildPair(path: string, message: string): Promise<void> {
     });
     const exits = await closes;
     const detail = children.map((child, index) => `#${index} ${child.detail()}`).join(' | ');
+    removeDir(dir);
     assert(exits.every(item => item.code !== 2),
         `${message}: no child crashed ${detail}`);
     assert(resolvedVerdicts.filter(verdict => verdict === 'LOCKED').length === 1,
@@ -103,23 +123,29 @@ async function runChildPair(path: string, message: string): Promise<void> {
 
 async function run(): Promise<void> {
     {
-        const path = lockPath('live-owner');
+        const dir = caseDir('live-owner');
+        const path = lockPath(dir);
         fs.writeFileSync(path, String(process.pid));
         assert(ProjectLock.acquireProjectLock(path) === undefined,
             'lock: returns undefined for a lock held by a live process');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('empty-owner');
+        const dir = caseDir('empty-owner');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '');
         const fd = ProjectLock.acquireProjectLock(path);
         assert(typeof fd === 'number', 'lock: recovers a lock file with no owner pid');
         assert(fs.readFileSync(path, 'utf8') === String(process.pid),
             'lock: rewrites own pid into the recovered lock file');
+        assert(ProjectLock.releaseProjectLock(fd) === true, 'unlock: releases the recovered lock');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('dead-owner');
+        const dir = caseDir('dead-owner');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const fd = ProjectLock.acquireProjectLock(path);
         assert(typeof fd === 'number', 'lock: steals a lock from a dead process');
@@ -127,19 +153,22 @@ async function run(): Promise<void> {
             'lock: writes own pid into the lock file');
         assert(ProjectLock.releaseProjectLock(fd) === true, 'unlock: releases by fd');
         assert(!fs.existsSync(path), 'unlock: removes the lock file it owns');
-        assert(fs.readdirSync(root).every((name: string) => !name.endsWith('.tmp')),
+        assert(fs.readdirSync(dir).every((name: string) => !name.endsWith('.tmp')),
             'lock: leaves no temporary file behind');
+        removeDir(dir);
     }
 
-    await runChildPair(lockPath('race'),
+    await runChildPair(caseDir('race'),
         'lock: exactly one of two concurrent processes wins');
 
-    fs.writeFileSync(lockPath('race-stale'), '');
-    await runChildPair(lockPath('race-stale'),
+    const staleDir = caseDir('race-stale');
+    fs.writeFileSync(lockPath(staleDir), '');
+    await runChildPair(staleDir,
         'lock: exactly one of two concurrent processes reclaims a stale lock');
 
     {
-        const path = lockPath('reclaim-raced');
+        const dir = caseDir('reclaim-raced');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const originalRename = fs.renameSync;
         fs.renameSync = () => {
@@ -158,10 +187,12 @@ async function run(): Promise<void> {
             'lock: returns undefined when another process reclaims the stale lock first');
         assert(fs.readFileSync(path, 'utf8') === '999999',
             'lock: leaves the lock file untouched when the reclaim rename loses');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('rename-denied');
+        const dir = caseDir('rename-denied');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const originalRename = fs.renameSync;
         fs.renameSync = () => {
@@ -178,10 +209,12 @@ async function run(): Promise<void> {
         fs.renameSync = originalRename;
         assert(message.includes(path),
             'lock: rethrows a rename failure when the lock file is still there');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('rename-denied-gone');
+        const dir = caseDir('rename-denied-gone');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const originalRename = fs.renameSync;
         fs.renameSync = (from: string) => {
@@ -199,10 +232,12 @@ async function run(): Promise<void> {
         fs.renameSync = originalRename;
         assert(result === undefined,
             'lock: returns undefined when the rename failure coincides with a vanished lock file');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('retry-raced');
+        const dir = caseDir('retry-raced');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const originalLink = fs.linkSync;
         let linkCalls = 0;
@@ -224,12 +259,14 @@ async function run(): Promise<void> {
         fs.linkSync = originalLink;
         assert(result === undefined,
             'lock: returns undefined when the retry loses to another process');
-        assert(fs.readdirSync(root).every((name: string) => !name.includes('.reclaim.') && !name.endsWith('.tmp')),
+        assert(fs.readdirSync(dir).every((name: string) => !name.includes('.reclaim.') && !name.endsWith('.tmp')),
             'lock: leaves no reclaim or temporary file behind after a lost retry');
+        removeDir(dir);
     }
 
     {
-        const path = lockPath('restore-taken');
+        const dir = caseDir('restore-taken');
+        const path = lockPath(dir);
         fs.writeFileSync(path, '999999');
         const originalRename = fs.renameSync;
         fs.renameSync = (from: string, to: string) => {
@@ -248,8 +285,9 @@ async function run(): Promise<void> {
             'lock: returns undefined when the restore target is already taken');
         assert(fs.readFileSync(path, 'utf8') === 'newer-lock',
             'lock: does not overwrite the newer lock on restore');
-        assert(fs.readdirSync(root).every((name: string) => !name.includes('.reclaim.')),
+        assert(fs.readdirSync(dir).every((name: string) => !name.includes('.reclaim.')),
             'lock: leaves no reclaim file behind after a lost restore');
+        removeDir(dir);
     }
 }
 
@@ -259,9 +297,9 @@ run()
     })
     .catch(error => {
         console.error(error);
-        process.exit(1);
+        process.exitCode = 1;
     })
     .finally(() => {
-        fs.rmSync(root, { recursive: true, force: true });
+        removeDir(root);
     });
 export {};
