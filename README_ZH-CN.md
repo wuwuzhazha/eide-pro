@@ -16,13 +16,18 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
 
 ## 概述
 
+- **Agent 自动化** — 同一个 EIDE 工程可由 AI agent 通过 MCP 服务器构建、
+  烧录，并通过 GDB/MI 调试：读取变量、单步执行、解码 Cortex-M fault 寄存器、
+  查询 SVD 外设。见 [Headless CLI 与 MCP 指南](./docs/headless.md)。
 - **工程创建** — 使用内置模板创建工程，或导入 Keil 5 (MDK)、IAR、Eclipse
   工程。Cortex-M 工程可安装标准 Keil 芯片支持包。
 - **构建** — 使用 AC5、AC6、GCC、LLVM_ARM、IAR_ARM、Keil_C51、SDCC、
   GNU_SDCC_MCS51、IAR_STM8、COSMIC_STM8、RISCV_GCC、MTI_GCC 和 ANY_GCC
   工具链进行编译、重新编译和清理。
-- **烧录** — 通过 J-Link、ST-Link、OpenOCD、pyOCD、probe-rs 和自定义命令
-  烧录器烧录设备。
+- **烧录** — 通过 J-Link、ST-Link、OpenOCD、pyOCD、probe-rs 烧录器烧录设备。
+  自定义命令烧录器仅在 VS Code 扩展中可用；headless CLI 与 MCP 会显式报错
+  （STVP 和 stcgal 同样），与 headless 的
+  [Limits](./docs/headless.md#limits) 一致。
 - **调试集成** — 为受支持的探针生成 Cortex-Debug launch 和 attach 配置，并
   为 `probe-rs-debug` 和 `gdbtarget` 调试适配器提供配置。
 - **编辑器工具** — Cppcheck 静态分析、无需 `c_cpp_properties.json` 的

@@ -18,8 +18,8 @@ groups, env.ini expansion, and virtual source folders.
 
 | Mode | How it is configured | Requires VS Code | Tools |
 |------|----------------------|------------------|-------|
-| VS Code HTTP MCP | `http://localhost:8940/mcp` plus `EIDE.MCP.Server.Enable` | Yes, with the project open | 21 project/build tools |
-| Headless stdio MCP | `eide-mcp --project ...` from the headless package | No | 42 tools, including 21 debug tools |
+| VS Code HTTP MCP | `http://localhost:8940/mcp` plus `EIDE.MCP.Server.Enable` | Yes, with the project open | Project/build tools |
+| Headless stdio MCP | `eide-mcp --project ...` from the headless package | No | Project/build tools plus debug tools |
 
 If `eide_debug_*` tools are present, it is the headless server. The headless
 server discovers its projects from launch arguments, so there is no "add

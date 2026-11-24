@@ -17,6 +17,10 @@ project and build model through a CLI and MCP server.
 
 ## Overview
 
+- **Agent automation** — the same EIDE project can be built and flashed by AI
+  agents through the MCP server, and debugged over GDB/MI: reading variables,
+  stepping, decoding Cortex-M fault registers, and looking up SVD peripherals.
+  See the [Headless CLI and MCP guide](./docs/headless.md).
 - **Project setup** — create projects from built-in templates, or import
   Keil 5 (MDK), IAR, and Eclipse projects. Standard Keil chip support packs can
   be installed for Cortex-M projects.
@@ -24,7 +28,9 @@ project and build model through a CLI and MCP server.
   IAR_ARM, Keil_C51, SDCC, GNU_SDCC_MCS51, IAR_STM8, COSMIC_STM8, RISCV_GCC,
   MTI_GCC, and ANY_GCC toolchains.
 - **Flash** — program devices through J-Link, ST-Link, OpenOCD, pyOCD,
-  probe-rs, and custom command uploaders.
+  probe-rs uploaders. Custom command uploaders work only in the VS Code
+  extension; the headless CLI and MCP fail explicitly for them (STVP and stcgal
+  likewise), matching the headless [Limits](./docs/headless.md#limits).
 - **Debug integration** — generate Cortex-Debug launch and attach
   configurations for the supported probes, and provide configurations for the
   `probe-rs-debug` and `gdbtarget` debug adapters.
@@ -151,7 +157,8 @@ plan without compiling; `flash --dry-run`
 prints the flash command without touching hardware. Results are emitted as one
 JSON object on stdout; logs go to stderr. See
 [docs/headless.md](./docs/headless.md) for the full option list, exit codes,
-build result fields, and flash options.
+build result fields, and flash options. For setting up a first build in CI, see
+[docs/ci.md](./docs/ci.md).
 
 The standalone bundles are `dist/eide_cli.js` and `dist/eide_mcp.js`; their
 package bin names are `eide-cli` and `eide-mcp`. Use `node dist/...` when
