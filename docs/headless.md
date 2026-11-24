@@ -155,11 +155,18 @@ Exit codes:
 | `3` | Invalid invocation, project configuration, or unsupported request (`error.kind` is `usage` or `config`) |
 | `4` | Failed to start the external tool (`error.kind` is `tool`) or unhandled failure (`error.kind` is `internal`) |
 
-Build results contain `success`, `stage`, `problems`, `memory`, `artifacts`,
+Build results contain `success`, `buildId` (unique per build), `configHash`,
+`stage`, `problems`, `memory`, `artifacts` (empty when the build fails),
+`failureKind` (`build`, `timeout`, or `signal`, on failure),
 `compileCommands` (when the builder produced `compile_commands.json`),
-`effectiveConfig`, and `logTail` on failure. A manifest is written to
+`effectiveConfig`, and `logTail` on failure. `plan` results contain
+`configHash` and the builder invocation, but no `buildId`. A manifest is written to
 `<outDir>/<target>/build-manifest.json`. The compiler database can be fed
 directly to clangd or other language servers.
+
+A successful `flash --dry-run` returns `uploader`, `verify`, `eraseAll`,
+`programs`, and `invocation` — the command object with `executable`, `args`,
+and `script`. `command` carries only the command name.
 
 The repository builds standalone entry scripts at `dist/eide_cli.js` and
 `dist/eide_mcp.js` (`npm run webpack:headless`). The release package exposes the
@@ -236,7 +243,8 @@ It additionally exposes debug tools, backed by GDB/MI:
 - `eide_debug_svd_lookup` (peripheral/register lookup by address or name)
 
 Tool calls are serialized. A debug session stays active until
-`eide_debug_disconnect` or server exit.
+`eide_debug_disconnect` or server exit. Each tool result provides the JSON
+payload twice: as `structuredContent` and as the same JSON in `content[0].text`.
 
 ### Example agent session
 
@@ -258,7 +266,7 @@ is optional in tool arguments (it must still match that project when given);
 { "success": true, "stage": "link", "problems": [], "artifacts": [ … 4 entries … ] }
 
 // eide_flash { "uid": "headless-e2e", "dryRun": true, "eraseAll": false }
-{ "uploader": "JLink", "command": { "executable": "…/JLink.exe", "args": [ … ] } }
+{ "uploader": "JLink", "invocation": { "executable": "…/JLink.exe", "args": [ … ] } }
 ```
 
 When a build fails, `artifacts` is empty; do not flash.
