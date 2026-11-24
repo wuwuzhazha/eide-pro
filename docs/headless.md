@@ -238,6 +238,30 @@ It additionally exposes debug tools, backed by GDB/MI:
 Tool calls are serialized. A debug session stays active until
 `eide_debug_disconnect` or server exit.
 
+### Example agent session
+
+Recorded against the `cortex-m3` fixture (toolchain paths omitted). `…` hides
+fields not relevant to the step. Tool arguments carry the project `uid`
+(required by build and flash tools); `eide_flash` also requires `eraseAll`.
+
+```jsonc
+// eide_build { "uid": "headless-e2e" }
+{ "success": true, "stage": "link", "problems": [], "artifacts": [ … 4 entries … ] }
+
+// main.c loses a semicolon; eide_build { "uid": "headless-e2e" }
+{ "success": false, "stage": "compile", "artifacts": [],
+  "problems": [ { "severity": "error", "line": 1, "column": 30,
+                  "message": "expected ';' before 'int'" } ] }
+
+// semicolon restored; eide_build { "uid": "headless-e2e" }
+{ "success": true, "stage": "link", "problems": [], "artifacts": [ … 4 entries … ] }
+
+// eide_flash { "uid": "headless-e2e", "dryRun": true, "eraseAll": false }
+{ "uploader": "JLink", "command": { "executable": "…/JLink.exe", "args": [ … ] } }
+```
+
+When a build fails, `artifacts` is empty; do not flash.
+
 ## Limits
 
 - Flash support covers JLink, OpenOCD, pyOCD, STLink, and probe-rs.
