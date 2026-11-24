@@ -107,6 +107,39 @@ async function run(): Promise<void> {
         assert(verdicts.filter(verdict => verdict === 'LOCKED').length === 1,
             `lock: exactly one of two concurrent processes wins (${verdicts.join(',')})`);
     }
+
+    {
+        const path = lockPath('race-stale');
+        fs.writeFileSync(path, '');
+        const children = [startChildLock(path), startChildLock(path)];
+        const verdicts = await Promise.all(children.map(child => child.verdict));
+        children.forEach(child => child.finish());
+        await Promise.all(children.map(child => child.exited));
+        assert(verdicts.filter(verdict => verdict === 'LOCKED').length === 1,
+            `lock: exactly one of two concurrent processes reclaims a stale lock (${verdicts.join(',')})`);
+    }
+
+    {
+        const path = lockPath('reclaim-raced');
+        fs.writeFileSync(path, '999999');
+        const originalRename = fs.renameSync;
+        fs.renameSync = () => {
+            const error: NodeJS.ErrnoException = new Error('ENOENT: reclaim raced');
+            error.code = 'ENOENT';
+            throw error;
+        };
+        let result: number | undefined | string = 'threw';
+        try {
+            result = ProjectLock.acquireProjectLock(path);
+        } catch (error) {
+            result = 'threw';
+        }
+        fs.renameSync = originalRename;
+        assert(result === undefined,
+            'lock: returns undefined when another process reclaims the stale lock first');
+        assert(fs.readFileSync(path, 'utf8') === '999999',
+            'lock: leaves the lock file untouched when the reclaim rename loses');
+    }
 }
 
 run()

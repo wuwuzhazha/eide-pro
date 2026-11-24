@@ -45,7 +45,21 @@ export function acquireProjectLock(fpath: string): number | undefined {
         if (holder !== undefined && isProcessAlive(holder)) {
             return undefined;
         }
-        fs.unlinkSync(fpath);
+        const reclaimPath = `${fpath}.reclaim.${process.pid}`;
+        try {
+            fs.renameSync(fpath, reclaimPath);
+        } catch (renameError) {
+            if ((<NodeJS.ErrnoException>renameError).code === 'ENOENT') {
+                return undefined;
+            }
+            throw renameError;
+        }
+        const reclaimed = readHolderPid(reclaimPath);
+        if (reclaimed !== undefined && isProcessAlive(reclaimed)) {
+            fs.renameSync(reclaimPath, fpath);
+            return undefined;
+        }
+        fs.unlinkSync(reclaimPath);
         fd = createLockFile(fpath);
     }
 
