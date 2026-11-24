@@ -77,15 +77,12 @@ async function run(): Promise<void> {
     }
 
     {
-        const path = lockPath('broken-owner');
-        fs.writeFileSync(path, 'not-a-pid');
-        let message = '';
-        try {
-            ProjectLock.acquireProjectLock(path);
-        } catch (error) {
-            message = error.message;
-        }
-        assert(message.includes(path), 'lock: throws when the holder pid cannot be read');
+        const path = lockPath('empty-owner');
+        fs.writeFileSync(path, '');
+        const fd = ProjectLock.acquireProjectLock(path);
+        assert(typeof fd === 'number', 'lock: recovers a lock file with no owner pid');
+        assert(fs.readFileSync(path, 'utf8') === String(process.pid),
+            'lock: rewrites own pid into the recovered lock file');
     }
 
     {
@@ -97,6 +94,8 @@ async function run(): Promise<void> {
             'lock: writes own pid into the lock file');
         assert(ProjectLock.releaseProjectLock(fd) === true, 'unlock: releases by fd');
         assert(!fs.existsSync(path), 'unlock: removes the lock file it owns');
+        assert(fs.readdirSync(root).every((name: string) => !name.endsWith('.tmp')),
+            'lock: leaves no temporary file behind');
     }
 
     {

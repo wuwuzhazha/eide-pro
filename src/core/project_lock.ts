@@ -20,28 +20,35 @@ function isProcessAlive(pid: number): boolean {
     }
 }
 
+function createLockFile(fpath: string): number {
+    const tmpPath = `${fpath}.${process.pid}.tmp`;
+    try {
+        fs.writeFileSync(tmpPath, String(process.pid));
+        fs.linkSync(tmpPath, fpath);
+    } finally {
+        fs.rmSync(tmpPath, { force: true });
+    }
+    return fs.openSync(fpath, 'r');
+}
+
 export function acquireProjectLock(fpath: string): number | undefined {
 
     let fd: number;
 
     try {
-        fd = fs.openSync(fpath, 'wx');
+        fd = createLockFile(fpath);
     } catch (error) {
         if ((<NodeJS.ErrnoException>error).code !== 'EEXIST') {
             throw error;
         }
         const holder = readHolderPid(fpath);
-        if (holder === undefined) {
-            throw new Error(`Failed to lock '${fpath}': lock file has no valid owner pid.`);
-        }
-        if (isProcessAlive(holder)) {
+        if (holder !== undefined && isProcessAlive(holder)) {
             return undefined;
         }
         fs.unlinkSync(fpath);
-        fd = fs.openSync(fpath, 'wx');
+        fd = createLockFile(fpath);
     }
 
-    fs.writeSync(fd, String(process.pid));
     lockedFiles.set(fd, fpath);
 
     return fd;
