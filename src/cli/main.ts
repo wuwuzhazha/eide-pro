@@ -43,7 +43,7 @@ export function writeJson(io: CliIo, value: unknown): void {
 export function errorPayload(
     command: string | null,
     error: Error,
-    kind: 'usage' | 'config' | 'internal'
+    kind: 'usage' | 'config' | 'tool' | 'internal'
 ): unknown {
     return {
         success: false,
@@ -133,7 +133,7 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
             writeJson(io, {
                 success: true,
                 command: 'plan',
-                    configHash: plan.configHash,
+                configHash: plan.configHash,
                 outDir: plan.outDir,
                 builder: plan.file,
                 args: plan.args,
@@ -154,9 +154,9 @@ export async function main(argv: string[], io: CliIo = processIo): Promise<numbe
             writeJson(io, errorPayload(command || null, err, 'usage'));
             return 3;
         }
-        const kind = err instanceof BuildExecutionError ? 'internal' : 'config';
+        const kind = err instanceof BuildExecutionError ? 'tool' : 'config';
         writeJson(io, errorPayload(command || null, err, kind));
-        return kind === 'internal' ? 4 : 3;
+        return kind === 'tool' ? 4 : 3;
     }
 }
 

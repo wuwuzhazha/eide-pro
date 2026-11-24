@@ -123,11 +123,15 @@ Options:
 | `--verify`, `--no-verify` | Force or skip verification where the tool allows it |
 | `--artifact <path[,addr]>` | Override the programmed artifact |
 
-All commands print one JSON object to stdout. Logs go to stderr. `create` has
-its own options (`--name`, `--template`, `--output`, `--project-name`) and does
-not use the build options above. Exit code `3` covers invalid invocations and
-project configuration, including unknown templates and existing output
-directories.
+All commands print one JSON object to stdout, including failures. Logs go to
+stderr. Every failure prints
+`{"success":false,"command":<name or null>,"error":{"name","message","kind"}}`,
+where `kind` is `usage` (invalid invocation), `config` (project configuration or
+environment, including an invalid `--toolchain-path`), `tool` (the external tool
+could not be started), or `internal` (unhandled failure). Usage errors also print
+the message and the usage text to stderr.
+`create` has its own options (`--name`, `--template`, `--output`,
+`--project-name`) and does not use the build options above.
 
 `--toolchain-path` is mapped to the toolchain's normal `EIDE.*` install setting:
 the toolchain root for most compilers (the executable folder is derived as
@@ -148,8 +152,8 @@ Exit codes:
 | --- | --- |
 | `0` | Success |
 | `2` | Build or flash operation failed |
-| `3` | Invalid invocation, project configuration, or unsupported request |
-| `4` | Failed to start the external tool |
+| `3` | Invalid invocation, project configuration, or unsupported request (`error.kind` is `usage` or `config`) |
+| `4` | Failed to start the external tool (`error.kind` is `tool`) or unhandled failure (`error.kind` is `internal`) |
 
 Build results contain `success`, `stage`, `problems`, `memory`, `artifacts`,
 `compileCommands` (when the builder produced `compile_commands.json`),

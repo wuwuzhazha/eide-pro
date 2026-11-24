@@ -3,13 +3,6 @@ const os = require('os');
 const NodePath = require('path');
 const yaml = require('yaml');
 const { main } = require('../../../src/cli/main') as any;
-    const missingToolchain = NodePath.join(root, 'no-such-toolchain');
-        '--toolchain-path', missingToolchain], text);
-    assert(code === 3 && text.err().includes(missingToolchain),
-        'cli: invalid toolchain path fails fast');
-
-    text = io();
-    code = await main(['plan', '--project', root, '--resources', resources,
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {
@@ -116,8 +109,23 @@ async function run(): Promise<void> {
     assert(code === 0 && text.out().includes('Usage:'), 'cli: help');
 
     text = io();
+    code = await main(['bogus'], text);
+    const bogus = JSON.parse(text.out());
+    assert(code === 3 && bogus.success === false && bogus.command === null
+        && bogus.error.kind === 'usage', 'cli: unknown command emits usage JSON');
+
+    text = io();
     code = await main(['build', '--project', root], text);
     assert(code === 3 && text.err().includes('--resources'), 'cli: missing environment is a usage error');
+
+    text = io();
+    const missingToolchain = NodePath.join(root, 'no-such-toolchain');
+    code = await main(['plan', '--project', root, '--resources', resources,
+        '--toolchain-path', missingToolchain], text);
+    const badToolchain = JSON.parse(text.out());
+    assert(code === 3 && text.err().includes(missingToolchain)
+        && badToolchain.command === 'plan' && badToolchain.error.kind === 'config',
+        'cli: invalid toolchain path fails fast');
 
     text = io();
     code = await main(['plan', '--project', root, '--resources', resources,
