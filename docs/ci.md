@@ -99,3 +99,27 @@ jobs:
 The GCC executable folder is derived from `--toolchain-path`; on Debian/Ubuntu
 `gcc-arm-none-eabi` installs `arm-none-eabi-gcc` under `/usr/bin`, so `/usr`
 is the toolchain root in this example.
+
+## Verified toolchain builds
+
+| Toolchain | Template or fixture | Verified by | Result |
+| --- | --- | --- | --- |
+| ARM GCC | `cortex-m3` fixture, `stm32f1xx_gcc` template | real `arm-none-eabi-gcc` build, ELF produced | verified build |
+| 8051 SDCC | `mcs51_sdcc` template | `apt install sdcc`, `create` + `build`, `.ihx` in `artifacts` (commit `9955741`) | verified build |
+| RISC-V GCC (`gd32vf103_riscv`) | template | Debian/Ubuntu `gcc-riscv64-unknown-elf` | not supported with apt toolchain |
+| STM8 (COSMIC/SDCC), AVR, MIPS, IAR, AC5/AC6 | templates | none | unverified |
+
+The `toolchain-builds` job and the `headless-package` E2E in
+`.github/workflows/ci.yml` run these checks; inspect their logs to reproduce.
+
+On Debian/Ubuntu, the apt RISC-V toolchain cannot build the
+`gd32vf103_riscv` template: `riscv-none-embed-gcc: fatal error: cannot read
+spec file 'nosys.specs'`. The Debian package ships no `specs` files, no
+`libnosys`, and no `/usr/lib/riscv64-unknown-elf/lib/` (only
+`picolibc-riscv64-unknown-elf`). The template requires the xPack
+`riscv-none-embed` toolchain, which bundles newlib.
+
+STM8, AVR, MIPS, and the commercial toolchains (IAR, AC5/AC6) have no real
+build verification: commercial licenses cannot be obtained in CI, and the
+other templates have not been run in this configuration. Plan-only checks
+exist for their schemas; treat build results as unverified.
