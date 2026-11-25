@@ -7,6 +7,7 @@ const yaml = require('yaml');
 const { createHeadlessToolExecutor } = require('../../../src/mcp/headless_tools') as any;
 
 const QEMU_MACHINE = 'netduinoplus2';
+const BREAKPOINT_LOCATION = 'main.c:7';
 const QEMU_ARGS = ['-S', '-nographic', '-monitor', 'none', '-serial', 'none'];
 
 function skipped(reason: string): never {
@@ -213,7 +214,7 @@ async function run(): Promise<void> {
         'qemu: target is halted until the debugger resumes it');
 
         const breakpoint = parse(await call('eide_debug_set_breakpoint', {
-            location: 'main', hardware: false
+            location: BREAKPOINT_LOCATION, hardware: false
         }));
         console.log(`EVIDENCE breakpoint=${JSON.stringify(breakpoint)}`);
 
@@ -239,24 +240,32 @@ async function run(): Promise<void> {
         console.log(`EVIDENCE stop-frame=${JSON.stringify(stopped.results?.frame)}`);
         console.log(`EVIDENCE hit=${hit}`);
         assert(hit, 'qemu: continue stops at breakpoint');
+        assert(stopped.results?.frame?.line === 7,
+            'qemu: stop frame is at main.c:7');
 
         const frames = parse(await call('eide_debug_backtrace', { maxDepth: 5 }));
         assert(Array.isArray(frames) && frames.some((frame: any) =>
             typeof frame.functionName === 'string' && frame.functionName.includes('main')),
         'qemu: backtrace contains main');
 
+        result = await call('eide_debug_select_frame', { level: 0 });
+        assert(result.isError !== true && parse(result).success === true,
+            'qemu: selects frame 0 before reading variables');
+
         const variableResult = await call('eide_debug_list_variables', { frameLevel: 0 });
         const variables = variableResult.isError === true ? [] : parse(variableResult).variables;
+        console.log(`EVIDENCE variables=${JSON.stringify(variableResult)}`);
         const localCounter = Array.isArray(variables)
             ? variables.find((variable: any) => variable?.name === 'local_counter') : undefined;
         assert(localCounter !== undefined
             && Number.isFinite(Number(localCounter.value)),
-        'qemu: reads frame variables');
+        `qemu: reads frame variables; variables=${JSON.stringify(variableResult).slice(0, 200)}`);
 
         const evaluateResult = await call('eide_debug_evaluate', { expression: 'counter' });
         const evaluated = evaluateResult.isError === true ? undefined : parse(evaluateResult);
+        console.log(`EVIDENCE evaluate=${JSON.stringify(evaluateResult)}`);
         assert(evaluated !== undefined && Number.isFinite(Number(evaluated.value)),
-            'qemu: evaluates global counter');
+            `qemu: evaluates global counter; evaluate=${JSON.stringify(evaluateResult).slice(0, 200)}`);
 
         const register = parse(await call('eide_debug_read_register', { name: 'pc' }));
         console.log(`EVIDENCE pc-after=${JSON.stringify(register.value)}`);
