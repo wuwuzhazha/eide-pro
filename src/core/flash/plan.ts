@@ -245,6 +245,11 @@ function buildRequest(
                 throw new ConfigError('JLink device is not configured (cpuInfo.cpuName).');
             }
             const templateFile = NodePath.join(snapshot.projectPath, JLINK_COMMAND_TEMPLATE);
+            const commandTemplate = fs.existsSync(templateFile)
+                ? resolveEnvironmentVariables(
+                    fs.readFileSync(templateFile, 'utf8'),
+                    createProjectEnvironment(snapshot, NodePath.join(snapshot.outDir, snapshot.target)))
+                : undefined;
             return {
                 ...base,
                 uploader,
@@ -254,9 +259,7 @@ function buildRequest(
                     interface: jlinkInterface(config.proType),
                     speedKhz: parseInteger(config.speed) ?? DEFAULT_JLINK_SPEED_KHZ,
                     extraArgs: splitCommandLine(String(config.otherCmds || '')),
-                    commandTemplate: fs.existsSync(templateFile)
-                        ? fs.readFileSync(templateFile, 'utf8')
-                        : undefined
+                    commandTemplate
                 }
             };
         }

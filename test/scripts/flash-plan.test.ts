@@ -119,7 +119,7 @@ try {
     assert(missingBinAddr, 'flash plan: JLink bin without address is rejected');
 
     write(NodePath.join(noBase, '.eide', 'jlink.flasher.cmd.template'),
-        'si 1\n${EIDE_JLINK_FLASHER_CMD}\nsavebin "${binFile[0]}" 0x08000000 0x100');
+        'si 1\n${EIDE_JLINK_FLASHER_CMD}\nsavebin "${binFile[0]}" 0x08000000 0x100\nlog "${ConfigName}.log"');
     const templated = plan(noBase, {
         flasherExecutable: 'C:/tools/JLink.exe',
         artifact: 'firmware.bin,0x08000000'
@@ -128,8 +128,9 @@ try {
         'si 1',
         'r', 'halt', `loadfile "${NodePath.join(noBase, 'firmware.bin')}",0x08000000`, 'r', 'go',
         `savebin "${NodePath.join(noBase, 'firmware.bin')}" 0x08000000 0x100`,
+        'log "Debug.log"',
         'exit'
-    ].join('\n'), 'flash plan: JLink command template is applied');
+    ].join('\n'), 'flash plan: JLink command template is applied with project variables');
 
     const artifact = plan(jlink, {
         flasherExecutable: 'C:/tools/JLink.exe',
