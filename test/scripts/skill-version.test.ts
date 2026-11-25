@@ -25,3 +25,5 @@ assert(versionLine![1] === packageVersion,
     `skill version matches package.json (skill=${versionLine![1]}, package=${packageVersion})`);
 
 console.log('All skill version tests passed.');
+
+export {};
