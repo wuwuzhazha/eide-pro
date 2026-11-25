@@ -44,6 +44,8 @@ import { ResInstaller } from "./ResInstaller";
 import { newMessage } from "./Message";
 import { concatSystemEnvPath, exeSuffix, prependToSysEnv, osType, appendToSysEnv, userhome } from "./Platform";
 import { StatusBarManager } from "./StatusBarManager";
+import { renderJLinkCommandFile, resolveJLinkProgramVariables } from "./core/flash/jlink_template";
+import { DEFAULT_FLASH_TIMEOUT_MS } from "./core/flash/service";
 
 let _mInstance: HexUploaderManager | undefined;
 
@@ -193,8 +195,6 @@ export abstract class HexUploader<InvokeParamsType> {
 
     abstract readonly toolType: HexUploaderType;
 
-    protected DEF_BIN_ADDR: string = '0x00000000';
-
     protected project: AbstractProject;
     protected shellPath: string | undefined;
     protected notUseTerminal: boolean;
@@ -286,8 +286,7 @@ export abstract class HexUploader<InvokeParamsType> {
             GlobalEvent.log_error(error);
         }
 
-        let commandLine = input
-            .replace(/\$\{hexFile\}|\$\{binFile\}|\$\{programFile\}/ig, programs[0].path)
+        const commandLine = input
             .replace(/\$\{port\}/ig, portList[0] || '')
             .replace(/\$\{portList\}/ig, portList.join(' '))
             .replace('${port[0]}', portList[0] || '')
@@ -295,20 +294,9 @@ export abstract class HexUploader<InvokeParamsType> {
             .replace('${port[2]}', portList[2] || '')
             .replace('${port[3]}', portList[3] || '');
 
-        programs.forEach((file, index) => {
-
-            commandLine = commandLine
-                .replace(new RegExp(String.raw`\$\{hexFile\[${index}\]\}`, 'ig'), file.path)
-                .replace(new RegExp(String.raw`\$\{binFile\[${index}\]\}`, 'ig'), file.path)
-                .replace(new RegExp(String.raw`\$\{programFile\[${index}\]\}`, 'ig'), file.path);
-
-            if (file.addr) {
-                commandLine = commandLine
-                    .replace(new RegExp(String.raw`\$\{binAddr\[${index}\]\}`, 'ig'), file.addr || '0x00000000')
-            }
-        });
-
-        return commandLine;
+        return resolveJLinkProgramVariables(
+            commandLine,
+            programs.map((file) => ({ path: file.path, address: file.addr })));
     }
 
     getAllProgramFiles(): FlashProgramFile[] {
@@ -328,7 +316,12 @@ export abstract class HexUploader<InvokeParamsType> {
     async executeShellCommand(title: string, commandLine: string, env?: any, useTerminal?: boolean, cwd?: string): Promise<FlashCommandResult | void> {
         if (this.notUseTerminal) {
             return new Promise<FlashCommandResult | void>((resolve) => {
-                child_process.exec(commandLine, { env, cwd }, (error, stdout, stderr) => {
+                child_process.exec(commandLine, {
+                    env,
+                    cwd,
+                    timeout: DEFAULT_FLASH_TIMEOUT_MS,
+                    maxBuffer: 16 * 1024 * 1024
+                }, (error, stdout, stderr) => {
                     if (error) {
                         resolve({
                             success: false,
@@ -426,11 +419,8 @@ class JLinkUploader extends HexUploader<any> {
         const files = this.parseProgramFiles(option);
 
         // jlink cmd template
-        let jlinkCommandtemplate: string = '${EIDE_JLINK_FLASHER_CMD}';
         const tFile = File.fromArray([this.project.getEideDir().path, 'jlink.flasher.cmd.template']);
-        if (tFile.IsFile()) {
-            jlinkCommandtemplate = tFile.Read();
-        }
+        const template = tFile.IsFile() ? tFile.Read() : undefined;
 
         // program cmds
         const flasherCmds: string[] = [];
@@ -448,8 +438,13 @@ class JLinkUploader extends HexUploader<any> {
 
             files.forEach((file) => {
                 if (/\.bin$/i.test(file.path)) {
-                    const addr = file.addr || option.baseAddr
-                    flasherCmds.push(`loadfile "${file.path}"${addr ? (`,${addr}`) : ''}`);
+                    const addr = file.addr || option.baseAddr;
+                    if (!addr) {
+                        throw new Error(
+                            `JLink requires an address for the .bin program '${file.path}': `
+                            + `set baseAddr or use a "file.bin,0x..." entry`);
+                    }
+                    flasherCmds.push(`loadfile "${file.path}",${addr}`);
                 } else {
                     flasherCmds.push(`loadfile "${file.path}"`);
                 }
@@ -472,18 +467,17 @@ class JLinkUploader extends HexUploader<any> {
         }
 
         // replace vars
-        jlinkCommandtemplate = jlinkCommandtemplate.replace(/\$\{EIDE_JLINK_FLASHER_CMD\}/g, flasherCmds.join(os.EOL));
-        jlinkCommandtemplate = this.resolveHexFilePathEnvs(jlinkCommandtemplate, files);
-        jlinkCommandtemplate = this.project.resolveEnvVar(jlinkCommandtemplate);
-        jlinkCommandtemplate = jlinkCommandtemplate + os.EOL + 'exit'; // append 'exit' command
+        let jlinkCommandFileContent = renderJLinkCommandFile(flasherCmds, template, os.EOL);
+        jlinkCommandFileContent = this.resolveHexFilePathEnvs(jlinkCommandFileContent, files);
+        jlinkCommandFileContent = this.project.resolveEnvVar(jlinkCommandFileContent);
 
         const codePage = ResManager.getLocalCodePage();
 
         // write commands file
         if (codePage && EncodingConverter.existCode(codePage)) {
-            fs.writeFileSync(jlinkCommandsFile.path, EncodingConverter.toTargetCode(jlinkCommandtemplate, codePage));
+            fs.writeFileSync(jlinkCommandsFile.path, EncodingConverter.toTargetCode(jlinkCommandFileContent, codePage));
         } else {
-            jlinkCommandsFile.Write(jlinkCommandtemplate);
+            jlinkCommandsFile.Write(jlinkCommandFileContent);
         }
 
         // -AutoConnect 1 -Device <DevName> -If <Interface> -Speed <value> -CommandFile <file>
@@ -675,8 +669,6 @@ class STLinkUploader extends HexUploader<string[]> {
 
     toolType: HexUploaderType = 'STLink';
 
-    DEF_BIN_ADDR = '0x08000000';
-
     constructor(prj: AbstractProject) {
         super(prj);
     }
@@ -698,8 +690,8 @@ class STLinkUploader extends HexUploader<string[]> {
 
         /* reset mode */
         if (options.resetMode && options.resetMode != 'default') {
-            const optMap: any = { 'SWrst': 'Srst', 'HWrst': 'Hrst' };
-            commands.push(optMap[options.resetMode] || options.resetMode);
+            const optMap: { [key: string]: string } = { 'SWrst': 'Srst', 'HWrst': 'Hrst' };
+            commands.push(`RM=${optMap[options.resetMode] || options.resetMode}`);
         }
 
         /* flash commands */
@@ -710,7 +702,10 @@ class STLinkUploader extends HexUploader<string[]> {
             );
 
             if (/\.bin$/i.test(programs[0].path)) {
-                commands.push(programs[0].addr || options.address || this.DEF_BIN_ADDR);
+                const addr = programs[0].addr || options.address;
+                if (addr) {
+                    commands.push(addr);
+                }
             }
 
             if (/\.stldr$/i.test(options.elFile)) {
@@ -800,7 +795,10 @@ class STLinkUploader extends HexUploader<string[]> {
             commands.push('--download', programs[0].path);
 
             if (/\.bin$/i.test(programs[0].path)) {
-                commands.push(programs[0].addr || options.address || this.DEF_BIN_ADDR);
+                const addr = programs[0].addr || options.address;
+                if (addr) {
+                    commands.push(addr);
+                }
             }
 
             /* verify program */
@@ -1050,8 +1048,8 @@ class PyOCDUploader extends HexUploader<string[]> {
         if (!eraseAll) {
             programs.forEach((file) => {
                 if (/\.bin$/i.test(file.path)) {
-                    const baseAddr = programs[0].addr || option.baseAddr || this.DEF_BIN_ADDR;
-                    commandLines.push(`${file.path}@${baseAddr}`);
+                    const baseAddr = file.addr || option.baseAddr;
+                    commandLines.push(baseAddr ? `${file.path}@${baseAddr}` : file.path);
                 } else {
                     commandLines.push(file.path);
                 }
@@ -1141,7 +1139,12 @@ class OpenOCDUploader extends HexUploader<string[]> {
 
         programs.forEach(file => {
             if (/\.bin$/i.test(file.path)) {
-                const addrStr = file.addr || option.baseAddr || this.DEF_BIN_ADDR;
+                const addrStr = file.addr || option.baseAddr;
+                if (!addrStr) {
+                    throw new Error(
+                        `OpenOCD requires an address for the .bin program '${file.path}': `
+                        + `set baseAddr or use a "file.bin,0x..." entry`);
+                }
                 commands.push(`-c "program \\"${File.ToUnixPath(file.path)}\\" ${addrStr} verify"`);
             } else {
                 commands.push(`-c "program \\"${File.ToUnixPath(file.path)}\\" verify"`);
@@ -1282,12 +1285,15 @@ class ProbeRSUploader extends HexUploader<string[]> {
 
         // just support one file
         commands.push(`--path "${programs[0].path}"`);
-        // if (programs[0].path.endsWith('.bin')) {
-        //     if (programs[0].addr || option.baseAddr) {
-        //         const baseAddr = programs[0].addr || option.baseAddr;
-        //         commands.push(`--base-address ${baseAddr}`);
-        //     }
-        // }
+        if (/\.bin$/i.test(programs[0].path)) {
+            const baseAddr = programs[0].addr || option.baseAddr;
+            if (!baseAddr) {
+                throw new Error(
+                    `probe-rs requires an address for the .bin program '${programs[0].path}': `
+                    + `set baseAddr or use a "file.bin,0x..." entry`);
+            }
+            commands.push(`--binary-format bin`, `--base-address "${baseAddr}"`);
+        }
         commands.push(`--verify`);
 
         if (option.speed)
