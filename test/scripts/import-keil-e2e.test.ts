@@ -112,6 +112,12 @@ async function run(): Promise<void> {
     assert(keilTargets[0].rte_deps === undefined,
         'fixture: empty <RTE> section yields no RTE dependencies');
 
+    assert(NodePath.posix.basename(File.ToUnixPath('.\\src\\main.c')) === 'main.c',
+        `posix: ToUnixPath + basename splits a backslash Keil path (${NodePath.posix.basename(File.ToUnixPath('.\\src\\main.c'))})`);
+    const foptKeys = Object.keys(keilTargets[0].fileOptions ?? {});
+    assert(foptKeys.length === 1 && foptKeys[0] === '<virtual_root>/App/main.c',
+        `posix: parser file option key uses the file name (${foptKeys.join(', ')})`);
+
     const settings = loadHeadlessSettings(repoRoot, workspaceFile, undefined);
     initHeadlessRuntime({
         resourcesDir,

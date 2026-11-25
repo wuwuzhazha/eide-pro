@@ -1128,7 +1128,7 @@ class ARMParser extends KeilParser<KeilARMOption> {
                                 const fopts = node?.FileOption?.FileArmAds?.Cads?.VariousControls;
                                 const fileOptions = this.mergeFileOptions(groupControls, fopts);
                                 if (fileOptions) {
-                                    const vPath = `${VirtualSource.rootName}/${fGroup.name}/${NodePath.basename(fPath)}`;
+                                    const vPath = `${VirtualSource.rootName}/${fGroup.name}/${NodePath.basename(File.ToUnixPath(fPath))}`;
                                     if (obj.fileOptions === undefined) obj.fileOptions = {};
                                     obj.fileOptions[vPath] = fileOptions;
                                 }

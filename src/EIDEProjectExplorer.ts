@@ -2566,7 +2566,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
                     srcOptsObj.options[keilTarget.name] = { files: {}, virtualPathFiles: {} };
                 const targetSrcOpts = srcOptsObj.options[keilTarget.name];
                 if (keilTarget.fileOptions) {
-                    const vFilePath = `${vFolderPath}/${NodePath.basename(srcFilePath)}`;
+                    const vFilePath = `${vFolderPath}/${NodePath.basename(File.ToUnixPath(srcFilePath))}`;
                     const fopts = keilTarget.fileOptions[vFilePath];
                     if (fopts && targetSrcOpts.virtualPathFiles) {
                         const optLi = [];
