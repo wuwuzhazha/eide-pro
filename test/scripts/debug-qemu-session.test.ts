@@ -54,6 +54,10 @@ function pcBeforeAddress(value: unknown): string | undefined {
     return typeof value === 'number' ? `0x${value.toString(16)}` : undefined;
 }
 
+function normalizedLine(value: unknown): string | undefined {
+    return value === undefined || value === null ? undefined : String(value);
+}
+
 function commandExists(command: string): boolean {
     const result = spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], {
         encoding: 'utf8'
@@ -240,7 +244,7 @@ async function run(): Promise<void> {
         console.log(`EVIDENCE stop-frame=${JSON.stringify(stopped.results?.frame)}`);
         console.log(`EVIDENCE hit=${hit}`);
         assert(hit, 'qemu: continue stops at breakpoint');
-        assert(stopped.results?.frame?.line === 7,
+        assert(normalizedLine(stopped.results?.frame?.line) === '7',
             'qemu: stop frame is at main.c:7');
 
         const frames = parse(await call('eide_debug_backtrace', { maxDepth: 5 }));
