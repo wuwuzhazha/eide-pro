@@ -8,6 +8,12 @@ All notable version changes will be recorded in this file.
 
 ### [Unreleased]
 
+**Breaking**:
+  - The bundled `python36` runtime is no longer installed or used; every map view toolchain parses maps with the builtin parser.
+  - The `EIDE_PY3_CMD` builtin variable is removed. If a shell task references `${EIDE_PY3_CMD}` or `~/.eide/bin/python36`, point it at your own python installation instead.
+  - An existing `~/.eide/bin/python36` directory is left untouched and only logged at startup, so shell tasks that still call it keep working.
+  - The serial monitor is unaffected: it is the native `serial_monitor` binary, not a python script.
+
 **New**:
   - Added an extension prompt that offers to install the separate `eide-cli` / `eide-mcp` package, with `EIDE.Tooling.PromptInstall`, prerequisite checks, retries for transient downloads, and Windows npm-shim handling.
   - Added `eide-cli --version` / `-v` for tooling detection.
