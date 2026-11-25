@@ -1015,6 +1015,37 @@ class ARMParser extends KeilParser<KeilARMOption> {
         }
     }
 
+    private mergeFileOptions(
+        groupControls: { [key: string]: any } | undefined,
+        fileControls: { [key: string]: any } | undefined
+    ): { defines: string[]; undefines: string[]; includes: string[]; miscOptions: string } | undefined {
+
+        if (!groupControls && !fileControls) {
+            return undefined;
+        }
+
+        const read = (controls: { [key: string]: any } | undefined, name: string): string =>
+            controls ? this.getNodeText(controls[name]) : '';
+
+        const merged = {
+            defines: this.parseMacroString(read(groupControls, 'Define'))
+                .concat(this.parseMacroString(read(fileControls, 'Define'))),
+            undefines: this.parseMacroString(read(groupControls, 'Undefine'))
+                .concat(this.parseMacroString(read(fileControls, 'Undefine'))),
+            includes: this.parseIncludePaths(read(groupControls, 'IncludePath'))
+                .concat(this.parseIncludePaths(read(fileControls, 'IncludePath'))),
+            miscOptions: [read(groupControls, 'MiscControls'), read(fileControls, 'MiscControls')]
+                .filter(text => text !== '').join(' ')
+        };
+
+        if (merged.defines.length === 0 && merged.undefines.length === 0 &&
+            merged.includes.length === 0 && merged.miscOptions === '') {
+            return undefined;
+        }
+
+        return merged;
+    }
+
     ParseData(): KeilParserResult<KeilARMOption>[] {
 
         const result: KeilParserResult<KeilARMOption>[] = [];
@@ -1042,11 +1073,18 @@ class ARMParser extends KeilParser<KeilARMOption> {
 
             if (groups !== undefined && groups.Group !== undefined) {
 
-                groups.Group.forEach((group: { GroupName: string, Files: any[] }) => {
+                groups.Group.forEach((group: {
+                    GroupName: string,
+                    Files: any[],
+                    GroupOption?: { [key: string]: any }
+                }) => {
                     const fGroup = <FileGroup>{ name: '', files: [] };
 
                     fGroup.name = this.FixGroupName(group.GroupName);
                     fGroup.disabled = this.isGroupDisabled(group);
+
+                    // group level options apply to every file of the group
+                    const groupControls = group.GroupOption?.GroupArmAds?.Cads?.VariousControls;
 
                     if (group.Files && group.Files.length > 0) {
 
@@ -1086,22 +1124,13 @@ class ARMParser extends KeilParser<KeilARMOption> {
                                     file: new File(this.ToAbsolutePath(fPath)),
                                     disabled: this.isFileDisabled(node)
                                 });
-                                // parse file options
+                                // parse file options, inherited from the group
                                 const fopts = node?.FileOption?.FileArmAds?.Cads?.VariousControls;
-                                if (fopts) {
-                                    const _MiscControls = this.getNodeText(fopts.MiscControls);
-                                    const _Define       = this.getNodeText(fopts.Define);
-                                    const _Undefine     = this.getNodeText(fopts.Undefine);
-                                    const _IncludePath  = this.getNodeText(fopts.IncludePath);
-                                    // ---
+                                const fileOptions = this.mergeFileOptions(groupControls, fopts);
+                                if (fileOptions) {
                                     const vPath = `${VirtualSource.rootName}/${fGroup.name}/${NodePath.basename(fPath)}`;
                                     if (obj.fileOptions === undefined) obj.fileOptions = {};
-                                    obj.fileOptions[vPath] = {
-                                        defines: this.parseMacroString(_Define),
-                                        undefines: this.parseMacroString(_Undefine),
-                                        includes: this.parseIncludePaths(_IncludePath),
-                                        miscOptions: _MiscControls
-                                    };
+                                    obj.fileOptions[vPath] = fileOptions;
                                 }
                             }
                         });
@@ -1163,9 +1192,12 @@ class ARMParser extends KeilParser<KeilARMOption> {
                 }
             }
 
-            result.forEach((target) => {
-                target.rte_deps = rte_deps.concat();
-            });
+            // an empty <RTE><files/></RTE> must not look like an RTE project
+            if (rte_deps.length > 0) {
+                result.forEach((target) => {
+                    target.rte_deps = rte_deps.concat();
+                });
+            }
         }
 
         return result;
