@@ -244,7 +244,7 @@ const stlinkCli = buildSTLinkCommand({
 });
 assertEqual(stlinkCli.args, [
     '-c', 'SWD', 'FREQ=4000', 'UR',
-    'Srst',
+    'RM=Srst',
     '-P', 'E:/build/app.bin', '0x08000000',
     '-EL', 'E:/tools/ExternalLoader/stm32.stldr',
     '-OB', 'RDP=0xAA', '-rOB',

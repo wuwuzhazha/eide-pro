@@ -257,7 +257,7 @@ export function buildSTLinkCommand(request: STLinkFlashRequest): FlashCommand {
             const args = ['-c', protocol, `FREQ=${frequency}`, 'UR'];
             if (resetMode !== 'default') {
                 const resetModeMap: { [key: string]: string } = { SWrst: 'Srst', HWrst: 'Hrst' };
-                args.push(resetModeMap[resetMode] ?? resetMode);
+                args.push(`RM=${resetModeMap[resetMode] ?? resetMode}`);
             }
 
             if (!request.eraseAll) {
