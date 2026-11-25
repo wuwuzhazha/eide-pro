@@ -7,6 +7,25 @@ matches VS Code: all project types, all registered toolchains, `.eide/env.ini`,
 virtual source folders, dependency groups, per-file options, and builder
 settings are supported.
 
+## Two ways to run EIDE
+
+| Entry point | Who uses it | Comes from | Prerequisites | Needs VS Code running |
+| --- | --- | --- | --- | --- |
+| VS Code extension (VSIX) | People, in the editor | Open VSX / GitHub Releases VSIX | .NET 6+ for the builder | Yes; the optional HTTP MCP server (port 8940, `EIDE.MCP.Server.Enable`) also requires an open project |
+| `eide-cli` / `eide-mcp` | Scripts and AI agents | Separate npm package from GitHub Release assets (`eide-pro-headless-<version>.tgz`), not the npm registry | Node.js 18+, .NET 6+ (the builder is framework-dependent) | No |
+
+Installing the extension does not put `eide-cli` on your PATH — that is
+expected, not a failed install. The extension offers to install these tools
+(decision and download logic in `src/mcp/tooling_install.ts`, which checks
+Node and .NET before prompting).
+
+For troubleshooting you can run the bundles shipped inside the extension
+directory (`node <extension-dir>/dist/eide_cli.js …`; kept by
+`.vscodeignore:30-31`). This is a stopgap, not an install method: it depends
+on the `res/` directory inside that extension folder, and updating the
+extension replaces the directory. For anything long-lived, install the
+standalone package.
+
 ## Install
 
 Download `eide-pro-headless-<version>.tgz` from

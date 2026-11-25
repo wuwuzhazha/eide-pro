@@ -127,7 +127,8 @@ Headless 宿主加载相同的 `.eide/eide.yml` 工程模型，并使用与 VS C
 `CodeBuilder` 生成构建参数。因此，Headless 构建遵循 `.eide/env.ini`、虚拟源码
 目录、`dependenceList` 分组、单文件选项、工作区设置、动态 overrides 以及由
 xpack 管理的工具链。从原版 EIDE 迁移而来？见
-[migrating-from-eide.md](./docs/migrating-from-eide.md)。
+[migrating-from-eide.md](./docs/migrating-from-eide.md)。扩展与 CLI/MCP 工具是
+两个独立的安装——见 ["Two ways to run EIDE"](./docs/headless.md#two-ways-to-run-eide)。
 
 ### CLI
 
