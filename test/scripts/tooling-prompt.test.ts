@@ -12,7 +12,8 @@ const {
     maybePromptToolingInstall,
     toolingPromptMessage,
     toolingRepositoryUrl,
-    toolingInstallFailureMessage
+    toolingInstallFailureMessage,
+    downloadToolingPackageWithRetry
 } = require('../../../src/extension');
 
 const failures: string[] = [];
@@ -109,6 +110,52 @@ async function run(): Promise<void> {
     check(failure.includes('npm install -g https://github.com/wuwuzhazha/eide-pro/releases/download/v4.3.0/eide-pro-headless-4.3.0.tgz'),
         `failure message carries a copyable fallback command (${failure})`);
     check(failure.includes('npm install failed'), 'failure message names the failed step');
+
+    const tlsMessage = 'Client network socket disconnected before secure TLS connection was established';
+    let transientDownloads = 0;
+    const transientMessages: string[] = [];
+    await downloadToolingPackageWithRetry(async (_url: string, _dest: string) => {
+        transientDownloads += 1;
+        if (transientDownloads < 3) {
+            throw new Error(tlsMessage);
+        }
+    }, 'https://example.invalid/pkg.tgz', 'pkg.tgz', (message: string) => transientMessages.push(message));
+    check(transientDownloads === 3, `transient TLS failures retry until the third attempt (downloads=${transientDownloads})`);
+    check(transientMessages[1]?.includes('attempt 2/3') === true && transientMessages[2]?.includes('attempt 3/3') === true,
+        `retry progress names the attempt (${JSON.stringify(transientMessages)})`);
+
+    let missingDownloads = 0;
+    let missingError = '';
+    try {
+        await downloadToolingPackageWithRetry(async (_url: string, _dest: string) => {
+            missingDownloads += 1;
+            const error: any = new Error('Download failed: HTTP 404 for https://example.invalid/missing.tgz');
+            error.code = 'HTTP_404';
+            throw error;
+        }, 'https://example.invalid/missing.tgz', 'missing.tgz');
+    } catch (error) {
+        missingError = error instanceof Error ? error.message : String(error);
+    }
+    check(missingDownloads === 1, `HTTP 404 is not retried (downloads=${missingDownloads})`);
+    check(missingError.includes('https://example.invalid/missing.tgz'),
+        `HTTP 404 preserves the URL (${missingError})`);
+
+    let exhaustedDownloads = 0;
+    const lastErrorText = 'ssl3_read_bytes: handshake failed after final attempt';
+    let exhaustedMessage = '';
+    try {
+        await downloadToolingPackageWithRetry(async (_url: string, _dest: string) => {
+            exhaustedDownloads += 1;
+            throw new Error(lastErrorText);
+        }, 'https://example.invalid/pkg.tgz', 'pkg.tgz');
+    } catch (error) {
+        exhaustedMessage = toolingInstallFailureMessage(
+            `download failed: ${error instanceof Error ? error.message : String(error)}`,
+            '4.3.0', toolingRepositoryUrl(packageJSON.repository.url));
+    }
+    check(exhaustedDownloads === 3, `three transient failures stop after three attempts (downloads=${exhaustedDownloads})`);
+    check(exhaustedMessage.includes('npm install -g') && exhaustedMessage.includes(lastErrorText),
+        `exhausted retries keep the original error and manual command (${exhaustedMessage})`);
 
     if (failures.length > 0) {
         throw new Error(`${failures.length} assertion(s) failed.`);

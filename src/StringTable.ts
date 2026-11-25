@@ -1149,6 +1149,14 @@ export const view_str$prompt$tooling_step_download = [
     'Downloading package ...'
 ][langIndex];
 
+export function view_str$prompt$tooling_step_download_attempt(attempt: number, maxAttempts: number): string {
+    const suffix = ` (attempt ${attempt}/${maxAttempts})`;
+    return [
+        `下载安装包${suffix} ...`,
+        `Downloading package${suffix} ...`
+    ][langIndex];
+}
+
 export const view_str$prompt$tooling_step_install = [
     '执行 npm install ...',
     'Running npm install ...'

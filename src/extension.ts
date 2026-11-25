@@ -53,6 +53,7 @@ import {
     view_str$prompt$tooling_intro, view_str$prompt$tooling_missing_prereqs,
     txt_tooling_install, txt_tooling_later, txt_tooling_dont_ask,
     view_str$prompt$tooling_install_title, view_str$prompt$tooling_step_download,
+    view_str$prompt$tooling_step_download_attempt,
     view_str$prompt$tooling_step_install, view_str$prompt$tooling_step_verify,
     view_str$prompt$tooling_install_done, view_str$prompt$tooling_install_failed,
     view_str$prompt$tooling_install_manual
@@ -79,6 +80,53 @@ const TOOLING_PROMPT_DISMISSED_KEY = 'eide.toolingPromptDismissedVersion';
 const toolingProbeTimeoutMs = 5000;
 const toolingVerifyTimeoutMs = 10000;
 const toolingDownloadMaxRedirects = 6;
+const toolingDownloadMaxAttempts = 3;
+const toolingDownloadRetryDelaysMs = [500, 1500];
+const retryableNetworkCodes = ['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNABORTED', 'ENOTFOUND', 'EPROTO'];
+const retryableNetworkMessages = [
+    'Client network socket disconnected before secure TLS connection was established',
+    'ssl3_read_bytes',
+    'socket hang up'
+];
+
+type ToolingDownload = (url: string, dest: string) => Promise<void>;
+
+export function isRetryableToolingDownloadError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== undefined && retryableNetworkCodes.includes(code)) {
+        return true;
+    }
+    return retryableNetworkMessages.some(message => error.message.includes(message));
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function downloadToolingPackageWithRetry(
+    download: ToolingDownload,
+    url: string,
+    dest: string,
+    report?: (message: string) => void
+): Promise<void> {
+    for (let attempt = 1; attempt <= toolingDownloadMaxAttempts; attempt++) {
+        report?.(attempt === 1
+            ? view_str$prompt$tooling_step_download
+            : view_str$prompt$tooling_step_download_attempt(attempt, toolingDownloadMaxAttempts));
+        try {
+            await download(url, dest);
+            return;
+        } catch (error) {
+            if (attempt === toolingDownloadMaxAttempts || !isRetryableToolingDownloadError(error)) {
+                throw error;
+            }
+            await delay(toolingDownloadRetryDelaysMs[attempt - 1]);
+        }
+    }
+}
 
 export interface ToolingPromptDeps {
     extensionVersion: string;
@@ -244,8 +292,12 @@ async function installTooling(
             repositoryUrl,
             workDir,
             download: async (url, dest) => {
-                progress.report({ message: view_str$prompt$tooling_step_download });
-                await downloadToolingPackage(url, dest);
+                await downloadToolingPackageWithRetry(
+                    downloadToolingPackage,
+                    url,
+                    dest,
+                    message => progress.report({ message })
+                );
             },
             run: async (file, args, timeoutMs) => {
                 progress.report({
