@@ -50,7 +50,7 @@ async function verifyMcp(serverPath, project, workspace) {
     try {
         await client.connect(transport);
         const tools = await client.listTools();
-        const toolNames = tools.tools.map((tool: any) => tool.name);
+        const toolNames = tools.tools.map(tool => tool.name);
         assert(toolNames.includes('eide_build'), `installed MCP server exposes eide_build (${toolNames.length} tools)`);
         assert(toolNames.includes('eide_get_environment'),
             `installed MCP server exposes eide_get_environment (${toolNames.length} tools)`);
