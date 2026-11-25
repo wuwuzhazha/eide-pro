@@ -1,0 +1,79 @@
+{
+  "format": "gcc",
+  "memSummary": {
+    "static_ram": 86,
+    "static_ram_delta": 0,
+    "total_flash": 264,
+    "total_flash_delta": 16
+  },
+  "modules": {
+    "[lib]/golden.a/lib.o": {
+      ".bss": 2,
+      ".text": 24
+    },
+    "app.o": {
+      ".bss": 80,
+      ".data": 4,
+      ".rodata": 48,
+      ".text": 96
+    },
+    "startup.o": {
+      ".text": 92,
+      "unknown": 8
+    }
+  },
+  "oldModules": {
+    "[lib]/golden.a/lib.o": {
+      ".bss": 2,
+      ".text": 24
+    },
+    "app.o": {
+      ".bss": 80,
+      ".data": 4,
+      ".rodata": 32,
+      ".text": 96
+    },
+    "startup.o": {
+      ".text": 92,
+      "unknown": 8
+    }
+  },
+  "shortModules": {
+    "[lib]/golden.a/lib.o": {
+      ".bss": 2,
+      ".bss-delta": 0,
+      ".text": 24,
+      ".text-delta": 0
+    },
+    "app.o": {
+      ".bss": 80,
+      ".bss-delta": 0,
+      ".data": 4,
+      ".data-delta": 0,
+      ".rodata": 48,
+      ".rodata-delta": 16,
+      ".text": 96,
+      ".text-delta": 0
+    },
+    "startup.o": {
+      ".text": 92,
+      ".text-delta": 0,
+      "unknown": 8,
+      "unknown-delta": 0
+    }
+  },
+  "subtotal": {
+    ".bss": 82,
+    ".bss-delta": 0,
+    ".data": 4,
+    ".data-delta": 0,
+    ".heap": 0,
+    ".heap-delta": 0,
+    ".rodata": 48,
+    ".rodata-delta": 16,
+    ".stack": 0,
+    ".stack-delta": 0,
+    ".text": 212,
+    ".text-delta": 0
+  }
+}

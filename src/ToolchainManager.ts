@@ -38,6 +38,8 @@ import { ArmBaseBuilderConfigData } from "./EIDEProjectModules";
 import * as utility from "./utility";
 import * as ArmCpuUtils from "./ArmCpuUtils";
 import * as os from "os";
+import * as yaml from 'yaml';
+import { MemapFormat, MemapModules, buildMemapTable, formatSigned, parseMemapModules } from './core/memap';
 
 //! 名称应该是大写，但由于历史因素，其中 'Keil_C51' 大小写暂时无法更正（避免旧的项目出现问题） 
 export type ToolchainName =
@@ -175,6 +177,48 @@ let _instance: ToolchainManager;
 
 interface ToolchainEnums {
     [type: string]: ToolchainName[];
+}
+
+/*
+    memap reads `TOOLCHAIN_ROOTDIR` from `<map>.view`'s `compilerPath`
+    (compiler dir -> toolchain root) and uses it only when the map's object
+    paths share no common prefix. Mirror that here so module names match.
+*/
+function readMemapToolchainRootDir(mapPath: string): string | undefined {
+    const viewFile = new File(mapPath + '.view');
+    if (!viewFile.IsFile())
+        return undefined;
+    const conf: { compilerPath?: string } | null = yaml.parse(viewFile.Read());
+    if (!conf || typeof conf.compilerPath !== 'string' || conf.compilerPath === '')
+        return undefined;
+    return NodePath.dirname(NodePath.dirname(conf.compilerPath));
+}
+
+function parseMemapFile(mapPath: string, format: MemapFormat): string[] | Error {
+
+    if (!File.IsFile(mapPath))
+        return new Error(`No such file: ${mapPath}`);
+
+    try {
+        const toolchainRootDir = readMemapToolchainRootDir(mapPath);
+        const modules = parseMemapModules(fs.readFileSync(mapPath).toString(), format, toolchainRootDir);
+
+        let oldModules: MemapModules | undefined;
+        if (File.IsFile(mapPath + '.old')) {
+            oldModules = parseMemapModules(fs.readFileSync(mapPath + '.old').toString(), format, toolchainRootDir);
+        }
+
+        const table = buildMemapTable(modules, oldModules);
+        const lines = utility.makeTextTable([table.header].concat(table.rows));
+        if (lines === undefined)
+            return new Error(`Nothing for this map: ${mapPath} !`);
+
+        lines.push(`Total Static RAM memory (data + bss): ${table.staticRam}(${formatSigned(table.staticRamDelta)}) bytes`);
+        lines.push(`Total Flash memory (text + data + rodata): ${table.totalFlash}(${formatSigned(table.totalFlashDelta)}) bytes`);
+        return lines;
+    } catch (error) {
+        return new Error(`Parse map file failed: ${error.message}`);
+    }
 }
 
 export class ToolchainManager {
@@ -1819,6 +1863,10 @@ class AC5 implements IToolchian {
         ];
     }
 
+    parseMapFile(mapPath: string): string[] | Error {
+        return parseMemapFile(mapPath, 'armcc');
+    }
+
     //
     // armcc list macros command: 
     //      armcc xxx --list_macros -E - <nul
@@ -2116,6 +2164,10 @@ class AC6 implements IToolchian {
         return SettingManager.GetInstance().getArmcc6Dir();
     }
 
+    parseMapFile(mapPath: string): string[] | Error {
+        return parseMemapFile(mapPath, 'armcc');
+    }
+
     getInternalDefines<T extends BuilderConfigData>(builderCfg: T, builderOpts: BuilderOptions): utility.CppMacroDefine[] {
         const cfg: ArmBaseBuilderConfigData = <any>builderCfg;
         const cpuName = cfg.cpuType.toLowerCase();
@@ -2366,6 +2418,10 @@ class GCC implements IToolchian {
         // 默认状态下是 thumb 模式，以兼容旧的项目
         if (!options.global['arm-thumb-mode'])
             options.global['arm-thumb-mode'] = 'thumb';
+    }
+
+    parseMapFile(mapPath: string): string[] | Error {
+        return parseMemapFile(mapPath, 'gcc');
     }
 
     getInternalDefines<T extends BuilderConfigData>(builderCfg: T, builderOpts: BuilderOptions): utility.CppMacroDefine[] {

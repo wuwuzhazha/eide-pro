@@ -1,0 +1,153 @@
+Archive member included to satisfy reference by file (symbol)
+
+build/v2/libgolden.a(lib.o)   build/v2/app.o (lib_main)
+
+Discarded input sections
+
+ .text          0x00000000        0x0 build/v2/app.o
+ .data          0x00000000        0x0 build/v2/app.o
+ .bss           0x00000000        0x0 build/v2/app.o
+ .data.extra_value
+                0x00000000        0x4 build/v2/app.o
+ .text          0x00000000        0x0 build/v2/startup.o
+ .data          0x00000000        0x0 build/v2/startup.o
+ .bss           0x00000000        0x0 build/v2/startup.o
+ .text          0x00000000        0x0 build/v2/libgolden.a(lib.o)
+ .data          0x00000000        0x0 build/v2/libgolden.a(lib.o)
+ .bss           0x00000000        0x0 build/v2/libgolden.a(lib.o)
+ .rodata.lib_message
+                0x00000000       0x21 build/v2/libgolden.a(lib.o)
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+FLASH            0x08000000         0x00010000         xr
+RAM              0x20000000         0x00005000         xrw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD build/v2/app.o
+LOAD build/v2/startup.o
+LOAD build/v2/libgolden.a
+                0x20005000                _estack = (ORIGIN (RAM) + LENGTH (RAM))
+
+.isr_vector     0x08000000        0x8
+ *(.isr_vector)
+ .isr_vector    0x08000000        0x8 build/v2/startup.o
+                0x08000000                g_vectors
+
+.text           0x08000008      0x104
+ *(.text*)
+ .text.main     0x08000008       0x60 build/v2/app.o
+                0x08000008                main
+ .text.Reset_Handler
+                0x08000068       0x5c build/v2/startup.o
+                0x08000068                Reset_Handler
+ .text.lib_main
+                0x080000c4       0x18 build/v2/libgolden.a(lib.o)
+                0x080000c4                lib_main
+ *(.rodata*)
+ .rodata.default_table
+                0x080000dc       0x30 build/v2/app.o
+                0x080000dc                default_table
+
+.glue_7         0x0800010c        0x0
+ .glue_7        0x0800010c        0x0 linker stubs
+
+.glue_7t        0x0800010c        0x0
+ .glue_7t       0x0800010c        0x0 linker stubs
+
+.vfp11_veneer   0x0800010c        0x0
+ .vfp11_veneer  0x0800010c        0x0 linker stubs
+
+.v4_bx          0x0800010c        0x0
+ .v4_bx         0x0800010c        0x0 linker stubs
+
+.iplt           0x0800010c        0x0
+ .iplt          0x0800010c        0x0 build/v2/app.o
+
+.rel.dyn        0x0800010c        0x0
+ .rel.iplt      0x0800010c        0x0 build/v2/app.o
+
+.data           0x20000000        0x4 load address 0x0800010c
+                0x20000000                _sdata = .
+ *(.data*)
+ .data.init_value
+                0x20000000        0x4 build/v2/app.o
+                0x20000000                init_value
+                0x20000004                _edata = .
+                0x0800010c                _sidata = LOADADDR (.data)
+
+.igot.plt       0x20000004        0x0 load address 0x08000110
+ .igot.plt      0x20000004        0x0 build/v2/app.o
+
+.bss            0x20000004       0x52 load address 0x08000110
+                0x20000004                _sbss = .
+ *(.bss*)
+ .bss.zero_buf  0x20000004       0x40 build/v2/app.o
+ .bss.extra_buf
+                0x20000044       0x10 build/v2/app.o
+ .bss.lib_state
+                0x20000054        0x2 build/v2/libgolden.a(lib.o)
+                0x20000054                lib_state
+ *(COMMON)
+                0x20000056                _ebss = .
+OUTPUT(build/v2/golden.elf elf32-littlearm)
+LOAD linker stubs
+
+.debug_info     0x00000000      0x337
+ .debug_info    0x00000000      0x16d build/v2/app.o
+ .debug_info    0x0000016d       0xef build/v2/startup.o
+ .debug_info    0x0000025c       0xdb build/v2/libgolden.a(lib.o)
+
+.debug_abbrev   0x00000000      0x1d5
+ .debug_abbrev  0x00000000       0xac build/v2/app.o
+ .debug_abbrev  0x000000ac       0xaa build/v2/startup.o
+ .debug_abbrev  0x00000156       0x7f build/v2/libgolden.a(lib.o)
+
+.debug_aranges  0x00000000       0x60
+ .debug_aranges
+                0x00000000       0x20 build/v2/app.o
+ .debug_aranges
+                0x00000020       0x20 build/v2/startup.o
+ .debug_aranges
+                0x00000040       0x20 build/v2/libgolden.a(lib.o)
+
+.debug_ranges   0x00000000       0x30
+ .debug_ranges  0x00000000       0x10 build/v2/app.o
+ .debug_ranges  0x00000010       0x10 build/v2/startup.o
+ .debug_ranges  0x00000020       0x10 build/v2/libgolden.a(lib.o)
+
+.debug_line     0x00000000      0x292
+ .debug_line    0x00000000      0x134 build/v2/app.o
+ .debug_line    0x00000134       0x6e build/v2/startup.o
+ .debug_line    0x000001a2       0xf0 build/v2/libgolden.a(lib.o)
+
+.debug_str      0x00000000      0x1f4
+ .debug_str     0x00000000      0x15d build/v2/app.o
+                                0x1a7 (size before relaxing)
+ .debug_str     0x0000015d       0x63 build/v2/startup.o
+                                0x126 (size before relaxing)
+ .debug_str     0x000001c0       0x34 build/v2/libgolden.a(lib.o)
+                                0x17c (size before relaxing)
+
+.comment        0x00000000       0x49
+ .comment       0x00000000       0x49 build/v2/app.o
+                                 0x4a (size before relaxing)
+ .comment       0x00000049       0x4a build/v2/startup.o
+ .comment       0x00000049       0x4a build/v2/libgolden.a(lib.o)
+
+.ARM.attributes
+                0x00000000       0x2d
+ .ARM.attributes
+                0x00000000       0x2d build/v2/app.o
+ .ARM.attributes
+                0x0000002d       0x2d build/v2/startup.o
+ .ARM.attributes
+                0x0000005a       0x2d build/v2/libgolden.a(lib.o)
+
+.debug_frame    0x00000000       0x90
+ .debug_frame   0x00000000       0x30 build/v2/app.o
+ .debug_frame   0x00000030       0x30 build/v2/startup.o
+ .debug_frame   0x00000060       0x30 build/v2/libgolden.a(lib.o)
