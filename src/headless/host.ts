@@ -13,6 +13,11 @@ import { EXTENSION_ID } from '../ExtensionInfo';
 import { installVscodeShim } from './vscode';
 import { ConfigError } from '../core/errors';
 import { TOOLCHAIN_SETTING_KEYS } from '../core/toolchain_setting_keys';
+import {
+    dumpProjectConfig,
+    migrateProjectConfig,
+    needsProjectConfigMigration
+} from '../core/project_config_migration';
 
 const FILE_SETTING_KEYS = new Set(['C51.INI.Path']);
 
@@ -103,6 +108,22 @@ function readProjectConfig(workspaceFile: string): any {
     if (!config || typeof config !== 'object') {
         throw new Error(`Invalid project config: ${configFile}`);
     }
+    return migrateLoadedConfig(config, configFile);
+}
+
+/**
+ * Migrate and persist an old config before the loader reads it again; configs
+ * that need no migration are returned untouched.
+ */
+function migrateLoadedConfig(config: any, configFile: string): any {
+    if (!needsProjectConfigMigration(config)) {
+        return config;
+    }
+    const sourceVersion = String(config.version);
+    migrateProjectConfig(config);
+    fs.writeFileSync(configFile, dumpProjectConfig(config), 'utf8');
+    process.stderr.write(
+        `migration ${configFile} from ${sourceVersion} to ${config.version}\n`);
     return config;
 }
 

@@ -7,10 +7,13 @@ EIDE Pro is a fork of [EIDE](https://github.com/github0null/eide)
 
 EIDE Pro reads and writes the same `.eide/eide.yml` project file
 (`src/EIDEProject.ts:835`); the headless host loads the same file
-(`src/headless/host.ts:110`). Whether an upstream EIDE project opens in EIDE
-Pro without manual steps is **unverified** — the migration path from older
-config versions exists (`src/core/project_config_migration.ts`), but upstream
-project samples were not tested.
+(`src/headless/host.ts:110`). Configs written by older EIDE versions (pre-4.0)
+are upgraded in place on every entry point: opening the project in VS Code
+(`src/EIDEProjectMigration.ts`), `eide-cli create`
+(`src/headless/project_creator.ts:185`), and loading a project headless
+(`openHeadlessProject`), which migrates before the build pipeline reads the
+config and rewrites the file only when the version requires it. The headless
+path is covered by `test/scripts/headless-migration.test.ts`.
 
 ## What EIDE Pro adds
 

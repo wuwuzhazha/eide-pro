@@ -1,5 +1,8 @@
 import * as yaml from 'yaml';
 
+/** Config version produced by `migrateProjectConfig`. */
+export const MIGRATED_CONFIG_VERSION = '4.0';
+
 const CONFIG_KEY_ORDER = [
     'version',
     'name',
@@ -63,16 +66,14 @@ export function needsProjectConfigMigration(config: any): boolean {
     if (typeof version !== 'string') {
         throw new Error('Project configuration has no version.');
     }
-    return compareVersion(version, '4.0') < 0;
+    return compareVersion(version, MIGRATED_CONFIG_VERSION) < 0;
 }
 
 export function migrateProjectConfig(config: any): any {
     if (!needsProjectConfigMigration(config)) {
         return config;
     }
-    if (typeof config.version === 'number') {
-        config.version = String(config.version);
-    }
+    config.version = MIGRATED_CONFIG_VERSION;
 
     const targets = config.targets && typeof config.targets === 'object'
         ? config.targets
