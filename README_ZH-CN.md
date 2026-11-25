@@ -165,7 +165,16 @@ stdio 服务器提供工程 build/rebuild、clean、flash、目标/源码/头文
 以及查找 SVD 符号（支持 `derivedFrom` 继承）。
 
 VS Code 还提供 HTTP MCP 服务器。通过 `EIDE.MCP.Server.Enable` 启用，并通过
-`EIDE.MCP.Server.Port` 设置端口（默认 `8940`）。
+`EIDE.MCP.Server.Port` 设置端口（默认 `8940`）。客户端配置里的条目名可以自行决定，
+服务端自身标识为 `EIDE Pro`：
+
+```json
+{
+  "servers": {
+    "EIDE Pro": { "url": "http://localhost:8940/mcp", "type": "http" }
+  }
+}
+```
 
 Headless 烧录支持 J-Link、OpenOCD、pyOCD、ST-Link 和 probe-rs。Headless 模式
 不支持 STVP、stcgal 和自定义命令烧录器。

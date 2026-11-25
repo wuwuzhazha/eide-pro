@@ -190,7 +190,16 @@ looking up SVD symbols (including `derivedFrom` inheritance).
 
 VS Code also exposes an HTTP MCP server. Enable it with
 `EIDE.MCP.Server.Enable` and set the port with `EIDE.MCP.Server.Port` (default
-`8940`).
+`8940`). Client configuration uses an entry name of your choosing; the server
+itself identifies as `EIDE Pro`:
+
+```json
+{
+  "servers": {
+    "EIDE Pro": { "url": "http://localhost:8940/mcp", "type": "http" }
+  }
+}
+```
 
 Headless flash supports J-Link, OpenOCD, pyOCD, ST-Link, and probe-rs. STVP,
 stcgal, and custom command uploaders are not supported in headless mode.
