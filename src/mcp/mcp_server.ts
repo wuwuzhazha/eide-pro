@@ -358,7 +358,7 @@ async function main(): Promise<void> {
                     const sec = ((performance.now() - started) / 1000).toFixed(2);
                     logInfo(`call tool "${tool}" -> ${result.isError ? 'fail' : 'ok'}, ${sec}sec`);
                     return result;
-                }, { version });
+                }, { version, debugTools: true });
                 await server.connect(transport);
                 await transport.handleRequest(req, res, req.body);
                 return;

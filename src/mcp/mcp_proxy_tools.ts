@@ -366,12 +366,14 @@ export function createMcpServer(
 
     if (options.debugTools) {
         const addressSchema = z.union([z.string(), z.number().int().nonnegative()]);
+        const debugDescription = (description: string): string =>
+            `${description} Requires the headless (stdio) MCP server; over HTTP this tool returns UnsupportedTransport.`;
 
         server.registerTool(
             'eide_debug_connect',
             {
                 title: 'Connect Debugger',
-                description: 'Start a GDB/MI debug session for the project. The session is kept until disconnect or server exit.',
+                description: debugDescription('Start a GDB/MI debug session for the project. The session is kept until disconnect or server exit.'),
                 inputSchema: {
                     uid: uidSchema,
                     target: z.string().min(1).describe('Remote target, for example "localhost:3333".'),
@@ -388,7 +390,7 @@ export function createMcpServer(
             'eide_debug_disconnect',
             {
                 title: 'Disconnect Debugger',
-                description: 'Close the active GDB/MI debug session.',
+                                description: debugDescription('Close the active GDB/MI debug session.'),
                 inputSchema: { uid: uidSchema }
             },
             async (args) => delegateToolCall('eide_debug_disconnect', args)
@@ -398,7 +400,7 @@ export function createMcpServer(
             'eide_debug_read_register',
             {
                 title: 'Read Register',
-                description: 'Read a CPU register from the active debug session.',
+                                description: debugDescription('Read a CPU register from the active debug session.'),
                 inputSchema: {
                     uid: uidSchema,
                     name: z.string().min(1).describe('Register name, for example "pc" or "cfsr".')
@@ -411,7 +413,7 @@ export function createMcpServer(
             'eide_debug_read_memory',
             {
                 title: 'Read Memory',
-                description: 'Read target memory and return it as a hexadecimal string.',
+                                description: debugDescription('Read target memory and return it as a hexadecimal string.'),
                 inputSchema: {
                     uid: uidSchema,
                     address: addressSchema.describe('Start address (number or 0x-prefixed string).'),
@@ -425,7 +427,7 @@ export function createMcpServer(
             'eide_debug_write_memory',
             {
                 title: 'Write Memory',
-                description: 'Write hexadecimal bytes to target memory.',
+                                description: debugDescription('Write hexadecimal bytes to target memory.'),
                 inputSchema: {
                     uid: uidSchema,
                     address: addressSchema.describe('Start address (number or 0x-prefixed string).'),
@@ -440,7 +442,7 @@ export function createMcpServer(
             'eide_debug_set_breakpoint',
             {
                 title: 'Set Breakpoint',
-                description: 'Insert a software or hardware breakpoint.',
+                                description: debugDescription('Insert a software or hardware breakpoint.'),
                 inputSchema: {
                     uid: uidSchema,
                     location: z.string().min(1).describe('Function, file:line, or address.'),
@@ -455,7 +457,7 @@ export function createMcpServer(
             'eide_debug_remove_breakpoint',
             {
                 title: 'Remove Breakpoint',
-                description: 'Remove a breakpoint by its numeric id.',
+                                description: debugDescription('Remove a breakpoint by its numeric id.'),
                 inputSchema: {
                     uid: uidSchema,
                     id: z.number().int().positive().describe('Breakpoint id.')
@@ -468,7 +470,7 @@ export function createMcpServer(
             'eide_debug_backtrace',
             {
                 title: 'Get Backtrace',
-                description: 'Get the current call stack from the active debug session.',
+                                description: debugDescription('Get the current call stack from the active debug session.'),
                 inputSchema: {
                     uid: uidSchema,
                     maxDepth: z.number().int().min(1).max(200).optional().describe(
@@ -482,7 +484,7 @@ export function createMcpServer(
             'eide_debug_list_breakpoints',
             {
                 title: 'List Breakpoints',
-                description: 'List breakpoints with type, enabled state, address, source location, condition, hit count, and multiple locations when present.',
+                                description: debugDescription('List breakpoints with type, enabled state, address, source location, condition, hit count, and multiple locations when present.'),
                 inputSchema: { uid: uidSchema }
             },
             async (args) => delegateToolCall('eide_debug_list_breakpoints', args)
@@ -492,7 +494,7 @@ export function createMcpServer(
             'eide_debug_list_threads',
             {
                 title: 'List Threads',
-                description: 'List target threads with id, target id, name, state, and current frame.',
+                                description: debugDescription('List target threads with id, target id, name, state, and current frame.'),
                 inputSchema: { uid: uidSchema }
             },
             async (args) => delegateToolCall('eide_debug_list_threads', args)
@@ -502,7 +504,7 @@ export function createMcpServer(
             'eide_debug_select_thread',
             {
                 title: 'Select Thread',
-                description: 'Switch the debugger to a thread by id and return its current frame.',
+                                description: debugDescription('Switch the debugger to a thread by id and return its current frame.'),
                 inputSchema: {
                     uid: uidSchema,
                     id: z.number().int().positive().describe('Thread id from eide_debug_list_threads.')
@@ -515,7 +517,7 @@ export function createMcpServer(
             'eide_debug_select_frame',
             {
                 title: 'Select Stack Frame',
-                description: 'Select a stack frame on the current thread before evaluating variables.',
+                                description: debugDescription('Select a stack frame on the current thread before evaluating variables.'),
                 inputSchema: {
                     uid: uidSchema,
                     level: z.number().int().nonnegative().describe(
@@ -529,7 +531,7 @@ export function createMcpServer(
             'eide_debug_list_variables',
             {
                 title: 'List Variables',
-                description: 'List local variables and arguments for the current or selected thread and frame.',
+                                description: debugDescription('List local variables and arguments for the current or selected thread and frame.'),
                 inputSchema: {
                     uid: uidSchema,
                     threadId: z.number().int().positive().optional().describe(
@@ -545,7 +547,7 @@ export function createMcpServer(
             'eide_debug_continue',
             {
                 title: 'Continue Execution',
-                description: 'Resume the target and wait for the next stop event.',
+                                description: debugDescription('Resume the target and wait for the next stop event.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -558,7 +560,7 @@ export function createMcpServer(
             'eide_debug_step_over',
             {
                 title: 'Step Over',
-                description: 'Step over the current source line and wait for the next stop event.',
+                                description: debugDescription('Step over the current source line and wait for the next stop event.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -571,7 +573,7 @@ export function createMcpServer(
             'eide_debug_step_into',
             {
                 title: 'Step Into',
-                description: 'Step into the next function call and wait for the next stop event.',
+                                description: debugDescription('Step into the next function call and wait for the next stop event.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -584,7 +586,7 @@ export function createMcpServer(
             'eide_debug_step_out',
             {
                 title: 'Step Out',
-                description: 'Run until the current function returns and wait for the next stop event.',
+                                description: debugDescription('Run until the current function returns and wait for the next stop event.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -597,7 +599,7 @@ export function createMcpServer(
             'eide_debug_interrupt',
             {
                 title: 'Interrupt Execution',
-                description: 'Interrupt the running target.',
+                                description: debugDescription('Interrupt the running target.'),
                 inputSchema: { uid: uidSchema }
             },
             async (args) => delegateToolCall('eide_debug_interrupt', args)
@@ -607,7 +609,7 @@ export function createMcpServer(
             'eide_debug_evaluate',
             {
                 title: 'Evaluate Expression',
-                description: 'Evaluate an expression in the target context.',
+                                description: debugDescription('Evaluate an expression in the target context.'),
                 inputSchema: {
                     uid: uidSchema,
                     expression: z.string().min(1).describe('Expression to evaluate.')
@@ -620,7 +622,7 @@ export function createMcpServer(
             'eide_debug_fault',
             {
                 title: 'Decode Cortex Fault',
-                description: 'Decode Cortex-M fault status registers. Reads HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.',
+                                description: debugDescription('Decode Cortex-M fault status registers. Reads HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.'),
                 inputSchema: {
                     uid: uidSchema,
                     hfsr: z.number().int().nonnegative().optional(),
@@ -636,7 +638,7 @@ export function createMcpServer(
             'eide_debug_svd_lookup',
             {
                 title: 'Lookup SVD',
-                description: 'Look up a peripheral or register from an SVD file by address, peripheral name, or register name.',
+                                description: debugDescription('Look up a peripheral or register from an SVD file by address, peripheral name, or register name.'),
                 inputSchema: {
                     uid: uidSchema,
                     path: z.string().min(1).describe('SVD file path, relative to the project root.'),

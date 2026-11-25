@@ -4,6 +4,7 @@ const NodePath = require('path');
 const yaml = require('yaml');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
+const { LATEST_PROTOCOL_VERSION } = require('@modelcontextprotocol/sdk/types.js');
 
 function assert(cond: boolean, msg: string): void {
     if (!cond) {
@@ -56,6 +57,7 @@ async function run(): Promise<void> {
     }
     const transport = new StdioClientTransport({
         command: process.execPath,
+        environment: { ...process.env, MCP_PROTOCOL_VERSION: LATEST_PROTOCOL_VERSION },
         args: [
             serverPath,
             '--project', root,
@@ -68,7 +70,6 @@ async function run(): Promise<void> {
     const client = new Client({ name: 'eide-test', version: '1.0.0' });
     try {
         await client.connect(transport);
-
         const handshake = client.getServerVersion();
         const expectedVersion = JSON.parse(fs.readFileSync(NodePath.join(process.cwd(), 'package.json'), 'utf8')).version;
         assert(handshake?.name === 'EIDE Pro', `protocol: server name is EIDE Pro (${JSON.stringify(handshake)})`);

@@ -70,8 +70,20 @@ function makeTextResult(success: boolean, message: string, err?: Error): CallToo
 function makeJsonResult(data: unknown, isError = false): CallToolResult {
     return {
         isError,
+        structuredContent: data as CallToolResult['structuredContent'],
         content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
     };
+}
+
+function unsupportedDebugTransport(): CallToolResult {
+    return makeJsonResult({
+        success: false,
+        error: {
+            kind: 'config',
+            name: 'UnsupportedTransport',
+            message: 'Debug tools require the headless MCP (stdio). Start: eide-mcp --project <dir>'
+        }
+    }, true);
 }
 
 function readCustomDependence(prj: AbstractProject) {
@@ -146,6 +158,28 @@ export async function executeTool(
     const uid = args.uid as string | null | undefined;
 
     switch (tool) {
+        case 'eide_debug_connect':
+        case 'eide_debug_disconnect':
+        case 'eide_debug_read_register':
+        case 'eide_debug_write_memory':
+        case 'eide_debug_read_memory':
+        case 'eide_debug_set_breakpoint':
+        case 'eide_debug_remove_breakpoint':
+        case 'eide_debug_backtrace':
+        case 'eide_debug_list_breakpoints':
+        case 'eide_debug_list_threads':
+        case 'eide_debug_select_thread':
+        case 'eide_debug_select_frame':
+        case 'eide_debug_list_variables':
+        case 'eide_debug_continue':
+        case 'eide_debug_step_over':
+        case 'eide_debug_step_into':
+        case 'eide_debug_step_out':
+        case 'eide_debug_interrupt':
+        case 'eide_debug_evaluate':
+        case 'eide_debug_fault':
+        case 'eide_debug_svd_lookup':
+            return unsupportedDebugTransport();
         case 'eide_build':
         case 'eide_rebuild': {
             const prj = resolveProject(explorer, uid);

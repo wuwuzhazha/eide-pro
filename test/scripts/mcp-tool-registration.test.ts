@@ -1,6 +1,11 @@
 const { createMcpServer } = require('../../../src/mcp/mcp_proxy_tools');
+const fs = require('fs');
+const NodePath = require('path');
+require('../../../src/headless/vscode').installVscodeShim();
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
+const { LATEST_PROTOCOL_VERSION } = require('@modelcontextprotocol/sdk/types.js');
+const { executeTool } = require('../../../src/mcp/mcp_impl');
 
 function assert(condition: boolean, message: string): void {
     if (!condition) {
@@ -11,15 +16,33 @@ function assert(condition: boolean, message: string): void {
 }
 
 async function run(): Promise<void> {
-    const server = createMcpServer(async () => ({ content: [] }), { version: '4.3.0' });
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const client = new Client({ name: 'registration-test', version: '1.0.0' });
-    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-    const tools = await client.listTools();
-    assert(tools.tools.length === 22, `proxy tools/list exposes 22 tools (got ${tools.tools.length})`);
-    assert(tools.tools.some((tool: any) => tool.name === 'eide_get_environment'),
-        'proxy tools/list exposes eide_get_environment');
-    await client.close();
+    const serverSource = fs.readFileSync(NodePath.join(__dirname, '../../../../src/mcp/mcp_server.ts'), 'utf8');
+    assert(/createMcpServer\([\s\S]*?\{ version, debugTools: true \}\)/.test(serverSource),
+        'HTTP server registers all tools with debugTools: true');
+    const names: string[][] = [];
+    for (const delegate of [
+        async () => ({ content: [] }),
+        async (tool: string, args: Record<string, unknown>) => executeTool(tool, args, {} as any)
+    ]) {
+        const server = createMcpServer(delegate,
+            { version: '4.3.0', debugTools: true });
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: 'registration-test', version: '1.0.0', options: { protocolVersion: LATEST_PROTOCOL_VERSION } });
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+        const tools = await client.listTools();
+        names.push(tools.tools.map((tool: any) => tool.name));
+        await client.close();
+    }
+    assert(names[0].length === 43 && names[1].length === 43,
+        `both transports expose 43 tools (headless=${names[0].length}, http=${names[1].length})`);
+    assert(JSON.stringify(names[0]) === JSON.stringify(names[1]),
+        'both transports expose the same tool name set');
+
+    const unsupported = await executeTool('eide_debug_connect', { uid: 'probe' }, {} as any);
+    assert(unsupported.isError === true
+        && (unsupported as any).structuredContent.error.name === 'UnsupportedTransport'
+        && (unsupported as any).structuredContent.error.message.includes('eide-mcp --project'),
+    `HTTP debug tool returns UnsupportedTransport (${JSON.stringify((unsupported as any).structuredContent)})`);
 }
 
 run().catch(error => {
