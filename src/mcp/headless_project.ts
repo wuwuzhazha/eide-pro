@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as NodePath from 'path';
 import * as yaml from 'yaml';
+import { dumpProjectConfig, migrateLoadedConfig } from '../core/project_config_migration';
 import { loadProjectSnapshot, ProjectSnapshot } from '../core/project_snapshot';
 
 function ensureStringArray(value: unknown, name: string): string[] {
@@ -46,7 +47,7 @@ export class HeadlessProject {
         if (!config || typeof config !== 'object') {
             throw new Error(`Invalid project config: ${this.configPath}`);
         }
-        return config;
+        return migrateLoadedConfig(config, this.configPath);
     }
 
     private targetConfig(config: any): { name: string; target: any } {
@@ -71,7 +72,7 @@ export class HeadlessProject {
         mutator(config, target, name);
         const temp = `${this.configPath}.${process.pid}.tmp`;
         try {
-            fs.writeFileSync(temp, yaml.stringify(config));
+            fs.writeFileSync(temp, dumpProjectConfig(config));
             fs.renameSync(temp, this.configPath);
         } finally {
             fs.rmSync(temp, { force: true });
