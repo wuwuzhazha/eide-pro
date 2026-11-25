@@ -28,6 +28,7 @@ All notable version changes will be recorded in this file.
   - Build results list SDCC `.ihx` artifacts; the AVR RTOS template uses ISR macros.
   - The MCP server identifies as `EIDE Pro` with the real extension version, and PATH resolution uses the platform-specific delimiter.
   - Tooling installation retries transient network failures and verifies npm shims through ComSpec on Windows.
+  - The Linux `unify_builder` hands `bash -c` its command as one argv element, so postbuild tools receive paths that contain spaces and projects such as imported Keil targets (`Target 1`) produce their hex/bin outputs.
 
 **Changes**:
   - Headless CLI and MCP now route `clean` and `flash` through a shared command kernel; `flash --dry-run` returns an `invocation` object and failures use the typed error envelope.
