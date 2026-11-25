@@ -44,6 +44,47 @@ test prints `SKIPPED:` and still runs the import/open/plan assertions;
 matrix the build assertions are skipped; the `headless-package` job that does
 install `gcc-arm-none-eabi` does not run this suite.
 
+## Verified: IAR and Eclipse import → persisted project → headless load
+
+`test/scripts/import-iar-eclipse-e2e.test.ts` drives the same import entries the
+editor dispatch uses. Both bodies were already independent of the project tree;
+they are now exposed as module-level `importIarProject` / `importEclipseProject`
+(next to `importKeilProject`), with the editor-only toolchain warning and
+workspace-switch dialogs left in `ProjectDataProvider.ImportIarProject` /
+`ImportEclipseProject`.
+
+- **IAR**: `test/fixtures/iar-import/demo.eww` references `demo.ewp` (ARM
+  toolchain, `Debug`/`Release`, `CCDefines`, `CCIncludePath2`, `IlinkIcf*`).
+  The import creates the EIDE project under `demo/` and writes
+  `.eide/eide.yml` + `.eide/env.ini`. The test asserts `miscInfo.uid`, type
+  `ARM`, toolchain `IAR_ARM`, the virtual folder (root file, `App` group,
+  nested `Drivers` group), per-configuration defines and include paths, the
+  mapped ICF path, and `PROJ_DIR = ..` in `env.ini`. It then opens the project
+  through `openHeadlessProject` (uid gate), checks the build plan carries all
+  three sources and both `Debug` defines, and finally deletes `miscInfo.uid` to
+  prove the gate rejects it again.
+- **Eclipse**: `test/fixtures/eclipse-import/.project` + `.cproject` describe an
+  `ARM Cross GCC` project with a `C Compiler` (defines, include path,
+  `STM32F407VGTx` MCU), a `C Linker` script, and `src` + `.` source entries.
+  The import writes `.eide/eide.yml` + `.eide/files.options.yml`. The test
+  asserts `miscInfo.uid`, type `ARM`, toolchain `GCC`, `srcDirs`
+  (`src`), the root virtual file, the define and include path, the MCU→CPU/FPU
+  mapping (`Cortex-M4`, `single`) and the linker script. It then opens the
+  project through `openHeadlessProject`, checks the plan carries `main.c` and
+  `src/main.c` plus the define, and proves the uid gate rejects a stripped
+  config.
+
+No IAR/Eclipse toolchain is required: `openHeadlessProject` is given a stub
+toolchain directory (`bin/` only), and the plan stage only builds the command
+model. No real IAR or Eclipse build is run.
+
+Run it with:
+
+```
+npm run compile && npm run compile:test
+node out/tmp/test/scripts/import-iar-eclipse-e2e.test.js
+```
+
 ## Fixed while verifying
 
 - **Group-level options were dropped** (`src/KeilXmlParser.ts`, `ARMParser`).
@@ -80,8 +121,16 @@ project.
 - **C51 group-level options**: the fix above covers `ARMParser` only; the C51
   parser reads target-level and file-level options and its group option layout
   was not verified.
-- **IAR / Eclipse imports**: both remain editor-only and unpersisted
-  (`ImportIarProject`, `ImportEclipseProject`); nothing is verified for them.
+- **IAR real toolchain build**: `iccarm`/`ilinkarm` are unavailable, so the IAR
+  test stops at import + load + plan structure; no ARM/IAR build is run.
+- **IAR per-file options and multi-project workbenches**: the IAR parser has no
+  per-file option model (so no `.eide/files.options.yml` is produced), and the
+  fixture's `.eww` references one `.ewp`; multi-project multi-root workspaces
+  and per-file settings are not asserted.
+- **Eclipse build and extended options**: the fixture is planned with a stub
+  GCC directory; no real `arm-none-eabi-gcc` build is run for it (the Keil test
+  covers the real GCC build path), and only defines/includes/MCU/linker script
+  are asserted — optimization, language standard and linked resources are not.
 - **Chip-pack/device binding**: `Device`/`Vendor` are read from the Keil project
   but no pack is installed or resolved by the test.
 
@@ -90,11 +139,15 @@ project.
 - Command `eide.operation.import_project` → `src/extension.ts`; dialogs and
   parser choice `src/OperationExplorer.ts` (`OnImportProject`); emitted
   `request_import_project`.
-- `ProjectDataProvider.ImportProject` dispatches to `ImportIarProject`,
-  `ImportEclipseProject` and `ImportKeilProject` in `src/EIDEProjectExplorer.ts`.
-  The Keil body is `ProjectDataProvider.importKeilProject`; the exported
-  `importKeilProject(option)` is the headless/test entry.
-- Only Keil persists: `prjConfig.Save()` plus `.eide/env.ini` and
-  `.eide/files.options.yml`, then `openWorkspace`.
+- `ProjectDataProvider.ImportProject` in `src/EIDEProjectExplorer.ts` dispatches
+  directly to the static `importKeilProject`, and to the instance wrappers
+  `ImportIarProject` / `ImportEclipseProject`. All three bodies live in the
+  static `ProjectDataProvider.importKeilProject` / `importIarProject` /
+  `importEclipseProject`; the module-level exported `importKeilProject(option)` /
+  `importIarProject(option)` / `importEclipseProject(option)` are the
+  headless/test entries. The IAR/Eclipse instance wrappers keep the editor-only
+  toolchain warning and the workspace-switch dialog.
+- All three persist `prjConfig.Save()` (with `miscInfo.uid`); Keil and IAR also
+  write `.eide/env.ini`; Keil and Eclipse also write `.eide/files.options.yml`.
 - Headless host: `src/headless/host.ts` (`initHeadlessRuntime`,
   `openHeadlessProject`), build service `src/headless/build_service.ts`.
