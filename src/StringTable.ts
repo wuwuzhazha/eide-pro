@@ -1115,8 +1115,8 @@ export const close_project = [
 //-------------Tooling install prompt-------------
 
 export const view_str$prompt$tooling_intro = [
-    '`eide-cli` / `eide-mcp` 是给脚本与 AI 用的独立工具包，安装本扩展不包含它。',
-    '`eide-cli` / `eide-mcp` ship as a separate package for scripts and AI agents; installing this extension does not include them.'
+    'EIDE Pro 的 `eide-cli` / `eide-mcp` 是给脚本和 AI 用的独立工具，推荐安装。',
+    'EIDE Pro ships `eide-cli` / `eide-mcp` as a separate package for scripts and AI agents. Installing them is recommended.'
 ][langIndex];
 
 export const view_str$prompt$tooling_missing_prereqs = [
