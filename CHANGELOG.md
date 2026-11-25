@@ -21,7 +21,7 @@ All notable version changes will be recorded in this file.
   - Invalid `--toolchain-path` values, missing bundled resources, C51 `TOOLS.INI` paths, and invalid flash device settings are reported as configuration errors instead of generic failures.
   - Project locks are created atomically with an owner PID, reclaim stale locks safely, and never overwrite a newer lock during retry or restore.
   - Imported projects, template-created projects, and headless-created projects now persist `miscInfo.uid`, so the CLI can open them directly.
-  - GDB/MI step/continue tools return only stop events that follow the resume command; `eide_debug_list_variables` uses the portable MI form and reads the selected frame.
+  - GDB/MI debug tools decode Cortex-M fault registers from the memory-mapped SCB registers, reject a variable frame level without a thread id, and return only stop events that follow the resume command; a stop that repeats the pre-resume PC is flagged `stale`.
   - VS Code HTTP MCP `eide_get_inc_dirs` and `eide_get_defines` now return the target lists their setters replace, not merged dependency values.
   - The MCP proxy reports an occupied IPC port before startup and restarts once when the IPC channel is unreachable.
   - Headless MCP calls and template extraction now have bounded timeouts; HTTP MCP builds use a bounded process runner.
