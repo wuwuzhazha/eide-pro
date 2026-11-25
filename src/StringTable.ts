@@ -457,11 +457,6 @@ export const view_str$env_desc$asm_base_args = [
     `Base Assembler Flags (ASMFLAGS)`
 ][langIndex];
 
-export const view_str$env_desc$py3_cmd = [
-    `插件内置的 python3 命令 (非windows平台则使用系统自带命令)`,
-    `The built-in python3 commands of the plugin (for non-Windows platforms, use the system's built-in commands)`
-][langIndex];
-
 //---------------Other---------------
 
 export const view_str$callgraph_data_file_fmt_err = [

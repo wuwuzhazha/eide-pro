@@ -674,10 +674,6 @@ function postLaunchHook(extensionCtx: vscode.ExtensionContext) {
         .refreshExternalToolsIndex()
         .catch(err => GlobalEvent.log_warn(err));
 
-    // check py pkgs
-    checkAndInstallBuiltPyPkgs()
-        .catch(err => GlobalEvent.log_warn(err));
-
     // MCP
     if (settingManager.isMcpServerEnable()) {
         const port = settingManager.getMcpServerPort();
@@ -731,88 +727,6 @@ async function reconnectMcpServer(context: vscode.ExtensionContext, notifyUser: 
 //////////////////////////////////////////////////
 // internal vsc-commands funcs
 //////////////////////////////////////////////////
-
-async function checkAndInstallBuiltPyPkgs() {
-
-    const resManager = ResManager.instance();
-    const py3 = resManager.getPython3();
-
-    // ---- for all platforms
-
-    const patchesDir = File.from(resManager.getAppDataDir().path, 'patches');
-
-    // memap patch
-    const memapPath = platform.osType() === 'win32' 
-        ? NodePath.join(NodePath.dirname(py3), 'Lib', 'site-packages', 'memap')
-        : NodePath.join(resManager.getLegacyBuilderDir().path, 'utils', 'memap');
-    if (File.IsDir(memapPath)) {
-        const patchVer = 2;
-        const patchFile = File.from(memapPath, '.patch');
-        let curVer = -1;
-        if (patchFile.IsFile())
-            curVer = parseInt(patchFile.Read().trim());
-        if (isNaN(curVer) || curVer < patchVer) {
-            const dstF = File.from(memapPath, '__main__.py');
-            const srcF = File.from(patchesDir.path, 'memap.py');
-            dstF.Write(srcF.Read());
-            patchFile.Write(patchVer.toString());
-        }
-    }
-
-    // ---- only for Win32
-
-    if (platform.osType() != 'win32')
-        return;
-
-    // python3 builtin pkg patch
-    const usrData = resManager.getAppUsrData() || {};
-    const wantedVer = 1;
-    if (usrData['python3_pkg_patch_ver'] !== wantedVer) {
-        const curVer = usrData['python3_pkg_patch_ver'] || '';
-        try {
-            if (!curVer) {
-                GlobalEvent.log_info(`reinstall jinja2`);
-                ChildProcess.execFileSync(py3, ['-m', 'pip', 'uninstall', '-y', 'jinja2']);
-                ChildProcess.execFileSync(py3, ['-m', 'pip', '--no-cache-dir', 'install', './Jinja2-2.11.3-py2.py3-none-any.whl'], {
-                    cwd: resManager.GetAppDataDir().path
-                });
-            }
-            GlobalEvent.log_info(`builtin pkg patch done.`);
-            resManager.setAppUsrData('python3_pkg_patch_ver', wantedVer);
-        } catch (error) {
-            GlobalEvent.log_error(error);
-        }
-    }
-
-    const builtin_pkgs: { [name: string]: string } = {
-        'pyserial': 'pyserial-3.5-py2.py3-none-any.whl'
-    };
-
-    for (const name in builtin_pkgs) {
-        // check:
-        //  .\python3.exe -m pip show intelhex
-        ChildProcess.exec(`"${py3}" -m pip show ${name}`, (err, stdout) => {
-            if (!err) {
-                const lines = stdout.split(/\r\n|\n/);
-                const installed = lines.some(line => /^Version:\s+/.test(line));
-                if (installed)
-                    return;
-            }
-            // install
-            //  .\python3 -m pip --no-cache-dir install %*
-            GlobalEvent.log_info(`Installing python package: ${builtin_pkgs[name]} ...`);
-            const pkgFullPath = NodePath.join(resManager.getAppDataDir().path, builtin_pkgs[name]);
-            ChildProcess.exec(`"${py3}" -m pip install "${pkgFullPath}"`, (err) => {
-                if (!err) {
-                    GlobalEvent.log_info(`Done.`);
-                } else {
-                    GlobalEvent.log_warn(`Fail to install python package: ${builtin_pkgs[name]}`);
-                    GlobalEvent.log_warn(err);
-                }
-            });
-        });
-    }
-}
 
 function ShowUUID() {
     vscode.window.showInputBox({
@@ -869,6 +783,13 @@ function checkBinFolder(binFolder: File): boolean {
         File.fromArray([binFolder.path, 'VERSION']).IsFile();
 }
 
+function logLegacyPythonRuntime(binFolder: File) {
+    const legacyDir = File.from(binFolder.path, 'python36');
+    if (legacyDir.IsDir()) {
+        GlobalEvent.log_info(`python36 is no longer used by EIDE Pro: ${legacyDir.path}`);
+    }
+}
+
 async function checkAndInstallBinaries(forceInstall?: boolean): Promise<boolean> {
 
     const resManager = ResManager.GetInstance();
@@ -876,6 +797,8 @@ async function checkAndInstallBinaries(forceInstall?: boolean): Promise<boolean>
     const binFolder = resManager.getBinDir();
     const eideCfg = resManager.getAppConfig<any>();
     const minReqVersion = eideCfg['binary_min_version'];
+
+    logLegacyPythonRuntime(binFolder);
 
     // !! for compatibility with offline-package !!
     // if we found eide binaries in plug-in root folder, move it 
@@ -1373,9 +1296,6 @@ function exportEnvToSysPath(context?: vscode.ExtensionContext) {
             process.env[env.key] = '';
         }
     }
-
-    /* setup python3 cmd */
-    process.env['EIDE_PY3_CMD'] = resManager.getPython3();
 
     // .NET 工具会收集用法数据，帮助我们改善你的体验。它由 Microsoft 收集并与社区共享。
     // 你可通过使用喜欢的 shell 将 DOTNET_CLI_TELEMETRY_OPTOUT 环境变量设置为 "1" 或 "true" 来选择退出遥测。
@@ -1984,8 +1904,6 @@ import {
 import { AbstractProject } from './EIDEProject';
 import { EideDiagnosticCode } from './ProblemMatcher';
 
-type MapViewParserType = 'memap' | 'builtin';
-
 interface MapViewRef {
 
     uid: string;
@@ -1993,8 +1911,6 @@ interface MapViewRef {
     vscWebview?: vscode.Webview;
 
     title: string;
-
-    parser: MapViewParserType;
 
     toolchainId: string;
 
@@ -2058,23 +1974,11 @@ class MapViewEditorProvider implements vscode.CustomTextEditorProvider {
             fileDepth = 100;
 
         // Every supported toolchain renders its report with the builtin parser.
-        const parser: MapViewParserType = 'builtin';
-
-        // check: do we have support a builtin parser ?
-        if (parser == 'builtin') {
-
-            let isSupported = false;
-
-            const toolchain = ToolchainManager.getInstance().getToolchainByName(<ToolchainName>toolchainId);
-            if (toolchain) {
-                isSupported = toolchain.parseMapFile != undefined;
-            }
-
-            if (!isSupported) {
-                webviewPanel.webview.html = this.genErrorHtml(title,
-                    `<span class="error">Error</span>: We don't support this toolchain type: '${conf.tool}' yet !`);
-                return;
-            }
+        const toolchain = ToolchainManager.getInstance().getToolchainByName(<ToolchainName>toolchainId);
+        if (!toolchain || !toolchain.parseMapFile) {
+            webviewPanel.webview.html = this.genErrorHtml(title,
+                `<span class="error">Error</span>: We don't support this toolchain type: '${conf.tool}' yet !`);
+            return;
         }
 
         // get map file
@@ -2101,7 +2005,6 @@ class MapViewEditorProvider implements vscode.CustomTextEditorProvider {
                 uid: uid,
                 vscWebview: webviewPanel.webview,
                 title: title,
-                parser: parser,
                 toolchainId: toolchainId,
                 treeDepth: fileDepth,
                 mapPath: mapFile.path
@@ -2152,58 +2055,15 @@ class MapViewEditorProvider implements vscode.CustomTextEditorProvider {
 
                     let lines: string[] = [];
 
-                    // use memap tools
-                    if (vInfo.parser == 'memap') {
-
-                        let memapTyp = 'ARM_MICRO';
-
-                        switch (vInfo.toolchainId) {
-                            case 'AC5':
-                            case 'AC6':
-                                memapTyp = 'ARM_MICRO';
-                                break;
-                            case 'GCC':
-                            case 'GNU_SDCC_MCS51':
-                                memapTyp = 'GCC_ARM';
-                                break;
-                            case 'IAR_ARM':
-                                memapTyp = 'IAR';
-                                break;
-                            default:
-                                throw new Error(`We don't support this toolchain type: '${vInfo.toolchainId}' yet !`);
-                        }
-
-                        if (os.platform() == 'win32') {
-                            // "%USERPROFILE%\.eide\bin\python36\python3" -m memap %*
-                            const py3 = ResManager.instance().getPython3();
-                            lines = ChildProcess
-                                .execFileSync(py3, ['-m', 'memap', '-t', memapTyp, '-d', vInfo.treeDepth.toString(), vInfo.mapPath])
-                                .toString().split(/\r\n|\n/);
-                        } else {
-                            // PYTHONPATH="/home/xxx/.eide/bin/builder/utils/memap" python -m memap -t GCC_ARM -d 100 "/home/xxx/build/Debug/stm32f1xx_gcc.map"
-                            const memapPkgDir = File.from(ResManager.GetInstance().getLegacyBuilderDir().path, 'utils', 'memap');
-                            const command = `PYTHONPATH="${memapPkgDir.path}" python -m memap -t ${memapTyp} -d ${vInfo.treeDepth} "${vInfo.mapPath}"`;
-                            lines = ChildProcess
-                                .execSync(command, { cwd: memapPkgDir.dir })
-                                .toString().split(/\r\n|\n/);
-                        }
+                    const toolchain = ToolchainManager.getInstance().getToolchainByName(<ToolchainName>vInfo.toolchainId);
+                    if (!toolchain || !toolchain.parseMapFile) {
+                        throw new Error(`We don't support this toolchain type: '${vInfo.toolchainId}' yet !`);
                     }
-                    // use built-in tools
-                    else {
 
-                        const toolchain = ToolchainManager.getInstance().getToolchainByName(<ToolchainName>vInfo.toolchainId);
-                        if (!toolchain) {
-                            throw new Error(`not have this toolchain: '${vInfo.toolchainId}'`);
-                        }
-
-                        if (toolchain.parseMapFile) {
-                            let ret = toolchain.parseMapFile(vInfo.mapPath, vInfo.treeDepth);
-                            if (ret instanceof Error)
-                                throw ret;
-                            else
-                                lines = ret;
-                        }
-                    }
+                    const ret = toolchain.parseMapFile(vInfo.mapPath, vInfo.treeDepth);
+                    if (ret instanceof Error)
+                        throw ret;
+                    lines = ret;
 
                     if (vInfo.vscWebview) {
                         vInfo.vscWebview.options = {

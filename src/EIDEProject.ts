@@ -3048,7 +3048,6 @@ $(OUT_DIR):
                 this.registerBuiltinVar(key, () => process.env[key] || '');
             }
         }
-        this.registerBuiltinVar('EIDE_PY3_CMD', () => ResManager.instance().getPython3());
     }
 
     private RegisterEvent(): void {

@@ -25,7 +25,7 @@
 import { File } from "../lib/node-utility/File";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { GlobalEvent } from "./GlobalEvents";
-import { exeSuffix, GetLocalCodePage, osType, getArchId, userhome, find } from "./Platform";
+import { exeSuffix, GetLocalCodePage, osType, getArchId, userhome } from "./Platform";
 import { ExceptionToMessage } from "./Message";
 
 import * as ChildProcess from 'child_process';
@@ -324,14 +324,6 @@ export class ResManager extends events.EventEmitter {
 
     getCMDPath(): string | undefined {
         return process.env['ComSpec'];
-    }
-
-    getPython3(): string {
-        if (osType() == 'win32') {
-            return File.from(userhome(), '.eide', 'bin', 'python36', 'python3.exe').path;
-        } else {
-            return find('python3') || 'python';
-        }
     }
 
     //-----------------------------------------------------------------
