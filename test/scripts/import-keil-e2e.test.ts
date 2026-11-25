@@ -253,11 +253,22 @@ async function run(): Promise<void> {
         skip('real ARM GCC build not run: arm-none-eabi-gcc is not on PATH ' +
             '(set ARM_GCC_DIR or install the toolchain; EIDE_REQUIRE_ARM_GCC=1 makes this fatal)');
     } else {
+        const runner = new NodeProcessRunner();
+        let builderOutput = '';
+        const recordingRunner = {
+            run: async (...args: Parameters<InstanceType<typeof NodeProcessRunner>['run']>) => {
+                const processResult = await runner.run(...args);
+                builderOutput = [processResult.stdout, processResult.stderr]
+                    .filter(text => text.length > 0)
+                    .join('\n');
+                return processResult;
+            }
+        };
         const buildService = new EideBuildService({
             resourcesDir,
             extensionRoot: repoRoot,
             toolchainPath: armGcc,
-            runner: new NodeProcessRunner(),
+            runner: recordingRunner,
             timeoutMs: 180000
         });
         const result = await buildService.build({ projectPath: projectDir, mode: 'rebuild' });
@@ -272,8 +283,10 @@ async function run(): Promise<void> {
             : '';
         assert(magic === '\x7fELF',
             `build: demo.elf is an ELF image (magic: ${Buffer.from(magic, 'latin1').toString('hex')})\n${diagnostics}`);
-        assert(result.artifacts.some((file: string) => file.endsWith('.hex')),
-            `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})\n${diagnostics}`);
+        const hexFiles = result.artifacts.filter((file: string) => file.endsWith('.hex'));
+        assert(hexFiles.length > 0,
+            `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})\n` +
+            (hexFiles.length > 0 ? '' : `${diagnostics}\nbuilder output:\n${builderOutput.slice(-4000)}`));
     }
 
     // regression: the uid gate must still reject an uninitialized project
