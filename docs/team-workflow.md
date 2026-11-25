@@ -1,12 +1,13 @@
 # Team workflow
 
-Three rules from real incidents, each enforced by a script. A rule without its
+Rules from real incidents, each enforced by a script. A rule without its
 incident record is dropped when memory fades.
 
 ## Rules
 
 1. Task cards are written to disk before dispatch; card paths and the base
-   SHA are verified at dispatch time.
+   SHA are verified at dispatch time with `git ls-files` and
+   `git merge-base` (scripted, see Checks).
    Incident: PR-9 changed the lock implementation inside `lib/node-utility`
    (a third-party submodule), leaving the parent repo pointer at a local-only
    commit; CI and other machines would fail outright. Root cause: dispatch
@@ -17,9 +18,26 @@ incident record is dropped when memory fades.
    check) were added from memory without cause, so later members could not
    tell whether they were still needed.
 
-3. Check that you are not behind the trunk before delivering.
+3. Check that you are not behind the trunk before delivering; run
+   `npm run check:branch` and resolve being behind on the member side.
    Incident: two red CI rounds (lock race, test-cleanup timing) required the
    PM to locate the cause; a shared workspace also produced polluted commits.
+
+4. A protocol or command sent to an external tool must have a test that
+   executes it with the real tool; mock-only tests prove parsing, not that
+   the tool accepts the command.
+   Incidents:
+   - `-stack-list-variables --all-values` always passed against a fake MI
+     stream and always failed against real GDB → frame-variable reads were
+     unusable on real hardware.
+   - `--frame` used alone is rejected by GDB (`Cannot specify --frame without
+     --thread`); the same class of error was committed twice.
+   - `eide_debug_continue` returned a stale stop event from before the call →
+     an agent would believe the program had stopped when it had not.
+   - The QEMU test initially lacked `-S`, so the target ran past its
+     breakpoints before the debugger attached → breakpoints never hit.
+   - Skipping was allowed locally but not forbidden in CI → the gate could
+     pass with the test skipped (now pinned with `EIDE_REQUIRE_QEMU_DEBUG`).
 
 ## Checks
 

@@ -17,13 +17,18 @@ project and build model through a CLI and MCP server.
 
 ## Overview
 
-- **Agent automation** — the same EIDE project can be built and flashed by AI
-  agents through the MCP server, and debugged over GDB/MI: reading variables,
-  stepping, decoding Cortex-M fault registers, and looking up SVD peripherals.
-  See the [Headless CLI and MCP guide](./docs/headless.md).
+- **Agent automation** — one EIDE project, two ways to work on it: develop in
+  VS Code, and build, flash, and debug the same project from CI, scripts, and
+  AI agents through the CLI and MCP server. GDB/MI debugging covers reading
+  variables, stepping, decoding Cortex-M fault registers, and looking up SVD
+  peripherals; the debug loop (connect, breakpoints, stack frames, variable
+  reads, fault decode, disconnect) runs in CI against QEMU. See the
+  [Headless CLI and MCP guide](./docs/headless.md#mcp-server-stdio).
 - **Project setup** — create projects from built-in templates, or import
-  Keil 5 (MDK), IAR, and Eclipse projects. Standard Keil chip support packs can
-  be installed for Cortex-M projects.
+  Keil 5 (MDK), IAR, and Eclipse projects in the editor; an imported project
+  gets a `miscInfo.uid` on import, so the CLI can open and build it directly.
+  Standard Keil chip support packs can be installed for Cortex-M projects.
+  Whether importing preserves all Keil build semantics is unverified.
 - **Build** — build, rebuild, and clean with the AC5, AC6, GCC, LLVM_ARM,
   IAR_ARM, Keil_C51, SDCC, GNU_SDCC_MCS51, IAR_STM8, COSMIC_STM8, RISCV_GCC,
   MTI_GCC, and ANY_GCC toolchains.
