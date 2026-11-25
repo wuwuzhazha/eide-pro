@@ -32,10 +32,6 @@ function skip(msg: string): void {
     console.log('SKIPPED:', msg);
 }
 
-function knownLimitation(msg: string): void {
-    console.log('KNOWN LIMITATION:', msg);
-}
-
 interface BuildFailureInfo {
     stage: string;
     failureKind?: 'timeout' | 'signal' | 'build';
@@ -288,21 +284,9 @@ async function run(): Promise<void> {
         assert(magic === '\x7fELF',
             `build: demo.elf is an ELF image (magic: ${Buffer.from(magic, 'latin1').toString('hex')})\n${diagnostics}`);
         const hexFiles = result.artifacts.filter((file: string) => file.endsWith('.hex'));
-        const builderHexSplit = process.platform !== 'win32'
-            && hexFiles.length === 0
-            && result.effectiveConfig.outDir.includes(' ')
-            && /output hex file\s+\[failed\]/.test(builderOutput)
-            && /No such file/.test(builderOutput);
-        if (builderHexSplit) {
-            knownLimitation(
-                'unify_builder runs postbuild tools through /bin/bash -c with quoted paths; ' +
-                `the output directory '${result.effectiveConfig.outDir}' contains a space, ` +
-                'so objcopy receives a split path and exits 1 (the ELF and map are still produced)');
-        } else {
-            assert(hexFiles.length > 0,
-                `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})` +
-                (hexFiles.length > 0 ? '' : `\n${diagnostics}\nbuilder output:\n${builderOutput.slice(-4000)}`));
-        }
+        assert(hexFiles.length > 0,
+            `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})` +
+            (hexFiles.length > 0 ? '' : `\n${diagnostics}\nbuilder output:\n${builderOutput.slice(-4000)}`));
     }
 
     // regression: the uid gate must still reject an uninitialized project
