@@ -56,6 +56,7 @@ const eideBuiltinDirs: { [key: string]: string } = {
     'data': 'res' + File.sep + 'data',
     'tools': 'res' + File.sep + 'tools' + File.sep + osType(),
     '7z': 'res' + File.sep + 'tools' + File.sep + osType() + File.sep + '7z',
+    'scripts': 'res' + File.sep + 'scripts',
 };
 
 // eide-binaries built-in folders
@@ -76,25 +77,6 @@ export interface FileCacheInfo {
     version?: string;
     sha?: string;
     lastUpdateTime?: number;
-    'scripts': 'res' + File.sep + 'scripts',
-    getBuiltInScriptsDir(): File {
-        return <File>this.GetDir('scripts');
-    }
-
-    /**
-     * QuickJS runtime that executes the built-in project importers.
-     * Undefined on platforms for which no runtime is bundled.
-     */
-    getBuiltInQjsExe(): File | undefined {
-        const exe = File.fromArray([
-            this.getBuiltInScriptsDir().path,
-            'qjs',
-            `${osType()}-${getArchId()}`,
-            `qjs${exeSuffix()}`
-        ]);
-        return exe.IsFile() ? exe : undefined;
-    }
-
 }
 
 export interface HostInfo {
@@ -368,6 +350,24 @@ export class ResManager extends events.EventEmitter {
 
     getBuiltInToolsDir(): File {
         return <File>this.GetDir('tools');
+    }
+
+    getBuiltInScriptsDir(): File {
+        return <File>this.GetDir('scripts');
+    }
+
+    /**
+     * QuickJS runtime that executes the built-in project importers.
+     * Undefined on platforms for which no runtime is bundled.
+     */
+    getBuiltInQjsExe(): File | undefined {
+        const exe = File.fromArray([
+            this.getBuiltInScriptsDir().path,
+            'qjs',
+            `${osType()}-${getArchId()}`,
+            `qjs${exeSuffix()}`
+        ]);
+        return exe.IsFile() ? exe : undefined;
     }
 
     getEideToolsInstallDir(): string {

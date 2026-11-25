@@ -1,10 +1,5 @@
 /*
     MIT License
-        const qjsExe = resManager.getBuiltInQjsExe();
-        if (qjsExe) {
-            exelist.push(qjsExe.path);
-        }
-
 
     Copyright (c) 2019 github0null
 
@@ -1546,6 +1541,11 @@ async function InitComponents(context: vscode.ExtensionContext): Promise<boolean
         const exelist: string[] = [
             resManager.Get7za().path,
         ];
+
+        const qjsExe = resManager.getBuiltInQjsExe();
+        if (qjsExe) {
+            exelist.push(qjsExe.path);
+        }
 
         new File(resManager.getUnifyBuilderExe().dir)
             .GetList(undefined, File.EXCLUDE_ALL_FILTER)
