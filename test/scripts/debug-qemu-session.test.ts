@@ -90,17 +90,37 @@ function stopProcess(child: any): Promise<void> {
 }
 
 async function run(): Promise<void> {
+    const repoRoot = process.cwd();
+    const root = fs.mkdtempSync(NodePath.join(os.tmpdir(), 'eide-debug-qemu-'));
+    const project = NodePath.join(root, 'project');
+    const fixture = NodePath.join(repoRoot, 'test', 'e2e', 'fixtures', 'cortex-m3');
+    const mainSource = NodePath.join(project, 'src', 'main.c');
+    const distCli = NodePath.join(repoRoot, 'dist', 'eide_cli.js');
+    const resourcesDir = NodePath.join(repoRoot, 'res');
+    if (!fs.existsSync(fixture)) {
+        fs.rmSync(root, { recursive: true, force: true });
+        console.error(`FAIL: QEMU fixture not found at ${fixture}`);
+        process.exit(1);
+    }
+    fs.cpSync(fixture, project, { recursive: true });
+    if (!fs.existsSync(mainSource)) {
+        fs.rmSync(root, { recursive: true, force: true });
+        console.error(`FAIL: QEMU breakpoint source not found at ${mainSource}`);
+        process.exit(1);
+    }
+    console.log(`OK: QEMU fixture prepared from ${fixture}`);
+
     const qemu = process.env.QEMU_SYSTEM_ARM || 'qemu-system-arm';
     const gdb = process.env.ARM_GDB || 'arm-none-eabi-gdb';
     if (!commandExists(qemu)) {
+        fs.rmSync(root, { recursive: true, force: true });
         skipped(`${qemu} not found; install QEMU to run the real GDB/MI session.`);
     }
     if (!commandExists(gdb)) {
+        fs.rmSync(root, { recursive: true, force: true });
         skipped(`${gdb} not found; install ARM GDB to run the real GDB/MI session.`);
     }
 
-    const root = fs.mkdtempSync(NodePath.join(os.tmpdir(), 'eide-debug-qemu-'));
-    const project = NodePath.join(root, 'project');
     const toolchainRoot = process.env.ARM_GCC_ROOT || '/usr';
     const gcc = NodePath.join(toolchainRoot, 'bin', process.platform === 'win32'
         ? 'arm-none-eabi-gcc.exe' : 'arm-none-eabi-gcc');
@@ -109,16 +129,10 @@ async function run(): Promise<void> {
         skipped(`ARM GCC not found at ${gcc}.`);
     }
 
-    const fixture = NodePath.join(__dirname, '..', 'e2e', 'fixtures', 'cortex-m3');
-    const sourceFixture = fs.existsSync(fixture)
-        ? fixture
-        : NodePath.join(__dirname, '..', '..', '..', 'test', 'e2e', 'fixtures', 'cortex-m3');
-    fs.cpSync(sourceFixture, project, { recursive: true });
-
     let qemuProcess: any;
     try {
         const build = spawnSync(process.execPath, [
-            NodePath.join(__dirname, '..', '..', 'dist', 'eide_cli.js'),
+            distCli,
             'build', '--project', project, '--toolchain-path', toolchainRoot,
             '--timeout', '120000'
         ], { encoding: 'utf8' });
@@ -140,8 +154,8 @@ async function run(): Promise<void> {
 
         const execute = createHeadlessToolExecutor({
             projectPaths: [project],
-            resourcesDir: NodePath.join(__dirname, '..', '..', '..', 'res'),
-            extensionRoot: NodePath.join(__dirname, '..', '..', '..'),
+            resourcesDir,
+            extensionRoot: repoRoot,
             toolchainPath: toolchainRoot,
             buildTimeoutMs: 5000,
             flashTimeoutMs: 5000,
