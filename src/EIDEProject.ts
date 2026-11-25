@@ -63,6 +63,7 @@ import {
     execInternalCommand, cxxDemangle
 } from './utility';
 import { ResInstaller } from './ResInstaller';
+import { newProjectUid } from './core/project_uid';
 import {
     view_str$prompt$filesOptionsComment,
     view_str$prompt$reloadForOldProject,
@@ -923,7 +924,7 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
 
     public getUid(): string {
         const miscInfo = this.GetConfiguration().config.miscInfo;
-        if (miscInfo.uid == undefined) miscInfo.uid = md5(`${this.getEideDir().path}-${Date.now()}`);
+        if (miscInfo.uid == undefined) miscInfo.uid = newProjectUid(this.getEideDir().path);
         return miscInfo.uid;
     }
 

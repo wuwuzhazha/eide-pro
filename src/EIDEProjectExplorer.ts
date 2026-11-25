@@ -107,7 +107,7 @@ import { ArrayDelRepetition } from '../lib/node-utility/Utility';
 import {
     copyObject, downloadFileWithProgress,
     sendCommandToTerminal, redirectHost, readGithubRepoFolder, FileCache,
-    genGithubHash, md5, toArray, newMarkdownString, newFileTooltipString, FileTooltipInfo, escapeXml,
+    genGithubHash, toArray, newMarkdownString, newFileTooltipString, FileTooltipInfo, escapeXml,
     readGithubRepoTxtFile, downloadFile, notifyReloadWindow, formatPath, execInternalCommand,
     copyAndMakeObjectKeysToLowerCase,
     sortPaths,
@@ -150,13 +150,14 @@ import { doMigration, detectProject } from './EIDEProjectMigration';
 import { onRegisterClangdProvider } from './clangdConfigProvider';
 import * as hooks from './Hooks';
 import { NodeProcessRunner, ProcessTimeoutError } from './core/process_runner';
+import { newProjectUid } from './core/project_uid';
 
 const BUILD_PROCESS_TIMEOUT_MS = 280 * 1000;
 
 export function ensureProjectUid(prjConfig: ProjectConfiguration<any>): void {
     const config = prjConfig.config;
     if (config.miscInfo.uid == undefined) {
-        config.miscInfo.uid = md5(`${prjConfig.GetFile().dir}-${Date.now()}`);
+        config.miscInfo.uid = newProjectUid(prjConfig.GetFile().dir);
     }
 }
 
@@ -2206,6 +2207,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
 
             // save all config
 
+            ensureProjectUid(basePrj.prjConfig);
             basePrj.prjConfig.Save();
         }
 
@@ -2470,6 +2472,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         }
 
         // save all config
+        ensureProjectUid(basePrj.prjConfig);
         basePrj.prjConfig.Save();
         // save src options
         const optFile = File.fromArray([basePrj.rootFolder.path, AbstractProject.EIDE_DIR, `files.options.yml`]);

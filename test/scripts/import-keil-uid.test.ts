@@ -7,6 +7,7 @@ require('../../../src/headless/vscode').installVscodeShim();
 
 const { ProjectConfiguration } = require('../../../src/EIDETypeDefine');
 const { ensureProjectUid } = require('../../../src/EIDEProjectExplorer');
+const { newProjectUid } = require('../../../src/core/project_uid');
 const { KeilParser } = require('../../../src/KeilXmlParser');
 const { openHeadlessProject } = require('../../../src/headless/host');
 const { File } = require('../../../lib/node-utility/File');
@@ -100,9 +101,18 @@ async function run(): Promise<void> {
     ensureProjectUid(prjConfig);
     prjConfig.Save();
 
+    const uidA = newProjectUid(projectDir);
+    const uidB = newProjectUid(projectDir);
+    assert(uidA !== uidB && uidA.length > 0 && uidB.length > 0,
+        `uid generator: same dir twice yields different values (${uidA} / ${uidB})`);
+
     const saved = yaml.parse(fs.readFileSync(eideFile, 'utf8'));
     assert(typeof saved.miscInfo.uid === 'string' && saved.miscInfo.uid.length > 0,
         `import: eide.yml stores miscInfo.uid (${saved.miscInfo.uid})`);
+
+    ensureProjectUid(prjConfig);
+    assert(prjConfig.config.miscInfo.uid === saved.miscInfo.uid,
+        'import: existing uid is preserved on re-initialization');
 
     const withUid = await openError();
     assert(!withUid.includes('requires an initialized project with miscInfo.uid'),
