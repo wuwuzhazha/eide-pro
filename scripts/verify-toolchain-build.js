@@ -31,7 +31,6 @@ const toolchainRoot = process.env.TOOLCHAIN_ROOT || '/usr';
 const work = process.env.RUNNER_TEMP
     ? path.join(process.env.RUNNER_TEMP, `eide-toolchain-${template}`)
     : fs.mkdtempSync(path.join(require('os').tmpdir(), `eide-toolchain-${template}-`));
-const project = path.join(work, 'project');
 const cli = path.join(repoRoot, 'dist', 'eide_cli.js');
 const resources = path.join(repoRoot, 'res');
 
@@ -48,9 +47,14 @@ const create = spawnSync(process.execPath, [
 assert(create.status === 0, `eide-cli create ${template}\n${create.stderr}`);
 const created = parseJson(create.stdout, 'create');
 assert(created.success === true, `create succeeded for ${template}`);
+assert(path.isAbsolute(created.projectPath) && fs.existsSync(created.projectPath),
+    `created.projectPath is an existing absolute path: ${created.projectPath}`);
+assert(fs.existsSync(path.join(created.projectPath, '.eide', 'eide.yml')),
+    `created project contains .eide/eide.yml: ${created.projectPath}`);
+console.log(`CREATED ${created.projectPath}`);
 
 const build = spawnSync(process.execPath, [
-    cli, 'build', '--project', project, '--toolchain-path', toolchainRoot,
+    cli, 'build', '--project', created.projectPath, '--toolchain-path', toolchainRoot,
     '--timeout', '300000'
 ], { encoding: 'utf8' });
 assert(build.status === 0, `eide-cli build ${template}\n${build.stderr}\n${build.stdout}`);
