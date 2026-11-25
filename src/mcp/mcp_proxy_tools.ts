@@ -32,6 +32,7 @@ const taskStore = new InMemoryTaskStore();
 export type ToolDelegate = (tool: string, args: Record<string, unknown>) => Promise<CallToolResult>;
 
 export interface McpServerOptions {
+    version: string;
     debugTools?: boolean;
     headless?: boolean;
     singleProject?: boolean;
@@ -39,15 +40,14 @@ export interface McpServerOptions {
 
 export function createMcpServer(
     delegateToolCall: ToolDelegate,
-    options: McpServerOptions = {}
+    options: McpServerOptions
 ): McpServer {
 
     const server = new McpServer(
         {
-            name: 'eide mcp server',
-            version: '1.2.0',
-            icons: [{ src: './mcp.svg', sizes: ['512x512'], mimeType: 'image/svg+xml' }],
-            websiteUrl: 'https://github.com/modelcontextprotocol/typescript-sdk'
+            name: 'EIDE Pro',
+            version: options.version,
+            websiteUrl: 'https://github.com/wuwuzhazha/eide-pro'
         },
         {
             capabilities: { logging: {}, tasks: { requests: { tools: { call: {} } } } },

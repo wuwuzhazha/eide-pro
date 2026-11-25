@@ -2,6 +2,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as fs from 'fs';
 import * as NodePath from 'path';
 import { NodeProcessRunner } from '../core/process_runner';
+import { cliVersion } from '../cli/main';
 import { StderrLogger } from '../core/logger';
 import { bundledResourcesDir } from '../headless/package_paths';
 import { createHeadlessToolExecutor, HeadlessToolOptions } from './headless_tools';
@@ -187,6 +188,7 @@ export async function main(argv: string[]): Promise<number> {
     };
     const server = createMcpServer(
         createHeadlessToolExecutor(options), {
+            version: cliVersion(),
             debugTools: true,
             headless: true,
             singleProject: args.projectPaths.length === 1

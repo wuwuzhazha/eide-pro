@@ -50,7 +50,7 @@ async function run(): Promise<void> {
     fs.mkdirSync(resources, { recursive: true });
     fs.mkdirSync(toolchain, { recursive: true });
 
-    const serverPath = NodePath.resolve(__dirname, '../../../src/mcp/headless_main.js');
+    const serverPath = NodePath.resolve(__dirname, '../../../../dist/eide_mcp.js');
     const transport = new StdioClientTransport({
         command: process.execPath,
         args: [
@@ -65,6 +65,15 @@ async function run(): Promise<void> {
     const client = new Client({ name: 'eide-test', version: '1.0.0' });
     try {
         await client.connect(transport);
+
+        const handshake = client.getServerVersion();
+        const expectedVersion = JSON.parse(fs.readFileSync(NodePath.join(process.cwd(), 'package.json'), 'utf8')).version;
+        assert(handshake?.name === 'EIDE Pro', `protocol: server name is EIDE Pro (${JSON.stringify(handshake)})`);
+        assert(handshake?.version === expectedVersion,
+            `protocol: server version matches package.json (${JSON.stringify(handshake)})`);
+        assert(handshake?.icons === undefined, `protocol: server declares no icons (${JSON.stringify(handshake)})`);
+        assert(handshake?.websiteUrl === 'https://github.com/wuwuzhazha/eide-pro',
+            `protocol: server website points to EIDE Pro (${JSON.stringify(handshake)})`);
 
         const tools = await client.listTools();
         assert(tools.tools.length === 42, 'protocol: exposes 42 tools');
