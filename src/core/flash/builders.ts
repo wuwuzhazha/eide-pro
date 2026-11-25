@@ -12,6 +12,7 @@ import {
     PyOCDFlashRequest,
     STLinkFlashRequest
 } from './types';
+import { renderJLinkCommandFile, resolveJLinkProgramVariables } from './jlink_template';
 
 export const FLASH_COMMAND_FILE_PLACEHOLDER = '__EIDE_FLASH_COMMAND_FILE__';
 
@@ -19,9 +20,6 @@ const DEFAULT_JLINK_INTERFACE = 'SWD';
 const DEFAULT_JLINK_SPEED_KHZ = 4000;
 const DEFAULT_STLINK_PROTOCOL = 'SWD';
 const DEFAULT_STLINK_FREQUENCY_KHZ = 4000;
-const DEFAULT_STLINK_BIN_ADDRESS = '0x08000000';
-const DEFAULT_PYOCD_BIN_ADDRESS = '0x00000000';
-const DEFAULT_OPENOCD_BIN_ADDRESS = '0x00000000';
 const DEFAULT_PROBE_RS_PROTOCOL = 'swd';
 
 export class FlashBuildError extends Error {
@@ -85,30 +83,38 @@ export function buildJLinkCommand(request: JLinkFlashRequest): FlashCommand {
 
     assertVerifyNotWithEraseAll(request, 'JLink');
 
+    if (request.verify === false) {
+        throw unsupported("verification cannot be disabled for 'JLink'");
+    }
+
     const options = request.options;
     const executable = requiredString(options.executable, 'JLink executable');
     const device = requiredString(options.device, 'JLink device');
     const protocol = options.interface ?? DEFAULT_JLINK_INTERFACE;
 
     const commands: string[] = [];
+    let programs: FlashProgram[] = [];
     let verify = false;
 
     if (request.eraseAll) {
-        commands.push('r', 'halt', 'erase', 'r', 'exit');
+        commands.push('r', 'halt', 'erase', 'r');
     } else {
-        const programs = programsOf(request, true);
+        programs = programsOf(request, true);
         commands.push('r', 'halt');
         for (const program of programs) {
             if (/\.bin$/i.test(program.path)) {
                 const address = program.address ?? request.address;
-                commands.push(address
-                    ? `loadfile "${program.path}",${address}`
-                    : `loadfile "${program.path}"`);
+                if (address === undefined || address.trim() === '') {
+                    throw invalidRequest(
+                        `JLink requires an address for the .bin program '${program.path}': `
+                        + 'set the project baseAddr or use a "file.bin,0x..." program entry');
+                }
+                commands.push(`loadfile "${program.path}",${address}`);
             } else {
                 commands.push(`loadfile "${program.path}"`);
             }
         }
-        commands.push('r', 'go', 'exit');
+        commands.push('r', 'go');
         verify = true;
     }
 
@@ -133,7 +139,11 @@ export function buildJLinkCommand(request: JLinkFlashRequest): FlashCommand {
         args,
         verify,
         script: {
-            contents: commands.join('\n'),
+            contents: renderJLinkCommandFile(
+                commands,
+                options.commandTemplate === undefined
+                    ? undefined
+                    : resolveJLinkProgramVariables(options.commandTemplate, programs)),
             extension: '.jlink'
         }
     };
@@ -167,7 +177,12 @@ export function buildOpenOCDCommand(request: OpenOCDFlashRequest): FlashCommand 
     for (const program of programs) {
         const path = toUnixPath(program.path);
         if (/\.bin$/i.test(program.path)) {
-            const address = program.address ?? request.address ?? DEFAULT_OPENOCD_BIN_ADDRESS;
+            const address = program.address ?? request.address;
+            if (address === undefined || address.trim() === '') {
+                throw invalidRequest(
+                    `OpenOCD requires an address for the .bin program '${program.path}': `
+                    + 'set the project baseAddr or use a "file.bin,0x..." program entry');
+            }
             args.push('-c', `program "${path}" ${address}${verify ? ' verify' : ''}`);
         } else {
             args.push('-c', `program "${path}"${verify ? ' verify' : ''}`);
@@ -207,8 +222,9 @@ export function buildPyOCDCommand(request: PyOCDFlashRequest): FlashCommand {
     if (!request.eraseAll) {
         for (const program of programsOf(request, true)) {
             if (/\.bin$/i.test(program.path)) {
-                const address = program.address ?? request.address ?? DEFAULT_PYOCD_BIN_ADDRESS;
-                args.push(`${program.path}@${address}`);
+                const address = program.address ?? request.address;
+                // pyOCD documents the start of flash as the default for a .bin without an address.
+                args.push(address ? `${program.path}@${address}` : program.path);
             } else {
                 args.push(program.path);
             }
@@ -249,7 +265,10 @@ export function buildSTLinkCommand(request: STLinkFlashRequest): FlashCommand {
                 const program = programs[0];
                 args.push('-P', program.path);
                 if (/\.bin$/i.test(program.path)) {
-                    args.push(program.address ?? request.address ?? DEFAULT_STLINK_BIN_ADDRESS);
+                    const address = program.address ?? request.address;
+                    if (address !== undefined && address.trim() !== '') {
+                        args.push(address);
+                    }
                 }
                 if (options.externalLoader) {
                     args.push('-EL', options.externalLoader);
@@ -291,7 +310,10 @@ export function buildSTLinkCommand(request: STLinkFlashRequest): FlashCommand {
                 const program = programs[0];
                 args.push('--download', program.path);
                 if (/\.bin$/i.test(program.path)) {
-                    args.push(program.address ?? request.address ?? DEFAULT_STLINK_BIN_ADDRESS);
+                    const address = program.address ?? request.address;
+                    if (address !== undefined && address.trim() !== '') {
+                        args.push(address);
+                    }
                 }
                 if (verify) {
                     args.push('-v');
@@ -343,9 +365,12 @@ export function buildProbeRSCommand(request: ProbeRSFlashRequest): FlashCommand 
     args.push('--path', program.path);
     if (/\.bin$/i.test(program.path)) {
         const address = program.address ?? request.address;
-        if (address) {
-            args.push('--base-address', address);
+        if (address === undefined || address.trim() === '') {
+            throw invalidRequest(
+                `probe-rs requires an address for the .bin program '${program.path}': `
+                + 'set the project baseAddr or use a "file.bin,0x..." program entry');
         }
+        args.push('--binary-format', 'bin', '--base-address', address);
     }
 
     const verify = request.verify !== false;

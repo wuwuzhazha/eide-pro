@@ -98,6 +98,39 @@ try {
     }
     assert(missingExe, 'flash plan: JLink requires explicit executable');
 
+    const noBase = writeProject('no-base', 'JLink', {
+        bin: '',
+        cpuInfo: { cpuName: 'STM32F103C8', vendor: 'ST' },
+        proType: 1,
+        speed: 8000,
+        otherCmds: ''
+    });
+    const noBasePlan = plan(noBase, { flasherExecutable: 'C:/tools/JLink.exe' });
+    assert(noBasePlan.request.address === undefined, 'flash plan: empty baseAddr stays unset');
+    assert(noBasePlan.command.script.contents === 'r\nhalt\nloadfile "' + noBasePlan.request.programs[0].path + '"\nr\ngo\nexit',
+        'flash plan: hex artifact loads without an address');
+
+    let missingBinAddr = false;
+    try {
+        plan(noBase, { flasherExecutable: 'C:/tools/JLink.exe', artifact: 'firmware.bin' });
+    } catch (error) {
+        missingBinAddr = error instanceof Error && error.message.includes('requires an address');
+    }
+    assert(missingBinAddr, 'flash plan: JLink bin without address is rejected');
+
+    write(NodePath.join(noBase, '.eide', 'jlink.flasher.cmd.template'),
+        'si 1\n${EIDE_JLINK_FLASHER_CMD}\nsavebin "${binFile[0]}" 0x08000000 0x100');
+    const templated = plan(noBase, {
+        flasherExecutable: 'C:/tools/JLink.exe',
+        artifact: 'firmware.bin,0x08000000'
+    });
+    assert(templated.command.script.contents === [
+        'si 1',
+        'r', 'halt', `loadfile "${NodePath.join(noBase, 'firmware.bin')}",0x08000000`, 'r', 'go',
+        `savebin "${NodePath.join(noBase, 'firmware.bin')}" 0x08000000 0x100`,
+        'exit'
+    ].join('\n'), 'flash plan: JLink command template is applied');
+
     const artifact = plan(jlink, {
         flasherExecutable: 'C:/tools/JLink.exe',
         artifact: 'firmware.bin,0x08004000'

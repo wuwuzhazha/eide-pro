@@ -79,6 +79,34 @@ assertEqual(jlinkBin.script?.contents, [
     'r', 'halt', 'loadfile "E:/build/app.bin",0x08000000', 'r', 'go', 'exit'
 ].join('\n'), 'JLink: bin uses request address');
 
+assertBuildError('invalid_request', () => buildJLinkCommand({
+    uploader: 'JLink',
+    programs: [{ path: 'E:/build/app.bin' }],
+    options: jlinkOptions
+}), 'JLink: bin without address is rejected');
+
+assertBuildError('not_supported', () => buildJLinkCommand({
+    uploader: 'JLink',
+    programs: [{ path: 'E:/build/app.hex' }],
+    verify: false,
+    options: jlinkOptions
+}), 'JLink: verify cannot be disabled');
+
+const jlinkTemplate = buildJLinkCommand({
+    uploader: 'JLink',
+    programs: [{ path: 'E:/build/app.bin', address: '0x08004000' }],
+    options: {
+        ...jlinkOptions,
+        commandTemplate: 'si 1\n${EIDE_JLINK_FLASHER_CMD}\nsavebin "${binFile[0]}" 0x08000000 0x100'
+    }
+});
+assertEqual(jlinkTemplate.script?.contents, [
+    'si 1',
+    'r', 'halt', 'loadfile "E:/build/app.bin",0x08004000', 'r', 'go',
+    'savebin "E:/build/app.bin" 0x08000000 0x100',
+    'exit'
+].join('\n'), 'JLink: user command template is rendered');
+
 const jlinkErase = buildJLinkCommand({
     uploader: 'JLink',
     eraseAll: true,
@@ -130,7 +158,7 @@ const openocdNoVerify = buildOpenOCDCommand({
 assertEqual(openocdNoVerify.args[5], 'program "E:/build/app.hex"', 'OpenOCD: verify=false omits verify keyword');
 assert(openocdNoVerify.verify === false, 'OpenOCD: reports no verification');
 
-const openocdDefaultAddress = buildOpenOCDCommand({
+assertBuildError('invalid_request', () => buildOpenOCDCommand({
     uploader: 'OpenOCD',
     programs: [{ path: 'E:/build/app.bin' }],
     options: {
@@ -138,10 +166,7 @@ const openocdDefaultAddress = buildOpenOCDCommand({
         interfaceConfig: 'cmsis-dap',
         targetConfig: 'stm32f4x'
     }
-});
-assertEqual(openocdDefaultAddress.args[5],
-    'program "E:/build/app.bin" 0x00000000 verify',
-    'OpenOCD: bin defaults to address zero');
+}), 'OpenOCD: bin without address is rejected');
 
 assertBuildError('not_supported', () => buildOpenOCDCommand({
     uploader: 'OpenOCD',
@@ -219,6 +244,22 @@ assertEqual(stlinkCli.args, [
     '-Run'
 ], 'STLink: ST-LINK_CLI program args');
 assert(stlinkCli.verify === true, 'STLink: ST-LINK_CLI verifies');
+
+const stlinkCliBinNoAddress = buildSTLinkCommand({
+    uploader: 'STLink',
+    programs: [{ path: 'E:/build/app.bin' }],
+    options: {
+        executable: 'ST-LINK_CLI.exe',
+        variant: 'stlink-cli',
+        runAfterProgram: false
+    }
+});
+assertEqual(stlinkCliBinNoAddress.args, [
+    '-c', 'SWD', 'FREQ=4000', 'UR',
+    '-P', 'E:/build/app.bin',
+    '-V', 'after_programming',
+    '-NoPrompt', '-TVolt'
+], 'STLink: bin without address omits the optional address argument');
 
 const stlinkCliErase = buildSTLinkCommand({
     uploader: 'STLink',
@@ -335,9 +376,19 @@ assertEqual(probeRsBin.args, [
     '--chip', 'STM32F103C8',
     '--protocol', 'swd',
     '--path', 'E:/build/app.bin',
+    '--binary-format', 'bin',
     '--base-address', '0x08000000',
     '--verify'
-], 'probe-rs: bin uses request address');
+], 'probe-rs: bin declares its format and address');
+
+assertBuildError('invalid_request', () => buildProbeRSCommand({
+    uploader: 'probe-rs',
+    programs: [{ path: 'E:/build/app.bin' }],
+    options: {
+        executable: 'cargo-flash',
+        chip: 'STM32F103C8'
+    }
+}), 'probe-rs: bin without address is rejected');
 
 assertBuildError('not_supported', () => buildProbeRSCommand({
     uploader: 'probe-rs',

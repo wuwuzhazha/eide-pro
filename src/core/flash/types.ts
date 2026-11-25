@@ -44,6 +44,7 @@ export interface JLinkFlashOptions {
     interface?: JLinkInterface;
     speedKhz?: number;
     extraArgs?: string[];
+    commandTemplate?: string;
 }
 
 export interface OpenOCDFlashOptions {

@@ -32,7 +32,7 @@ export interface FlashPlan {
 
 const DEFAULT_JLINK_SPEED_KHZ = 4000;
 const DEFAULT_STLINK_FREQUENCY_KHZ = 4000;
-const DEFAULT_BASE_ADDRESS = '0x08000000';
+const JLINK_COMMAND_TEMPLATE = NodePath.join('.eide', 'jlink.flasher.cmd.template');
 
 function splitCommandLine(input: string): string[] {
     const args: string[] = [];
@@ -230,7 +230,7 @@ function buildRequest(
         programs,
         address: typeof config.baseAddr === 'string' && config.baseAddr.length > 0
             ? config.baseAddr
-            : DEFAULT_BASE_ADDRESS,
+            : undefined,
         eraseAll: environment.eraseAll,
         verify: environment.verify,
         timeoutMs: environment.timeoutMs,
@@ -244,6 +244,7 @@ function buildRequest(
             if (device.length === 0 || device === 'null') {
                 throw new ConfigError('JLink device is not configured (cpuInfo.cpuName).');
             }
+            const templateFile = NodePath.join(snapshot.projectPath, JLINK_COMMAND_TEMPLATE);
             return {
                 ...base,
                 uploader,
@@ -252,7 +253,10 @@ function buildRequest(
                     device,
                     interface: jlinkInterface(config.proType),
                     speedKhz: parseInteger(config.speed) ?? DEFAULT_JLINK_SPEED_KHZ,
-                    extraArgs: splitCommandLine(String(config.otherCmds || ''))
+                    extraArgs: splitCommandLine(String(config.otherCmds || '')),
+                    commandTemplate: fs.existsSync(templateFile)
+                        ? fs.readFileSync(templateFile, 'utf8')
+                        : undefined
                 }
             };
         }
