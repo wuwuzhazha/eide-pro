@@ -5,6 +5,9 @@
 
     <configuration>
         <name>Debug</name>
+        <toolchain>
+            <name>ARM</name>
+        </toolchain>
         <settings>
             <name>ICCARM</name>
             <data>
@@ -21,10 +24,26 @@
                 </option>
             </data>
         </settings>
+        <settings>
+            <name>ILINK</name>
+            <data>
+                <option>
+                    <name>IlinkIcfOverride</name>
+                    <state>1</state>
+                </option>
+                <option>
+                    <name>IlinkIcfFile</name>
+                    <state>link.icf</state>
+                </option>
+            </data>
+        </settings>
     </configuration>
 
     <configuration>
         <name>Release</name>
+        <toolchain>
+            <name>ARM</name>
+        </toolchain>
         <settings>
             <name>ICCARM</name>
             <data>
