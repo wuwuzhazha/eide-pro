@@ -56,6 +56,17 @@ async function run(): Promise<void> {
     write(NodePath.join(outDir, 'demo.hex'), 'hex');
 
     const kernel = createCommandKernel({ runner: { run: async () => ({ code: 0, stdout: '', stderr: '' }) } });
+
+    const dryRun = await kernel.flash({
+        command: 'flash',
+        projectPath: root,
+        target: 'Debug',
+        flasherExecutable: 'C:/fake/JLink.exe',
+        dryRun: true
+    });
+    assert(dryRun.success === true && dryRun.verify === true,
+        'kernel: flash dry-run reports the default verification');
+
     const cleaned = await kernel.clean({
         command: 'clean',
         projectPath: root,

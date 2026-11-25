@@ -138,7 +138,7 @@ export function createCommandKernel(options: CommandKernelOptions): CommandKerne
                             args: plan.command.args,
                             script: plan.command.script
                         },
-                        verify: plan.request.verify,
+                        verify: plan.command.verify,
                         eraseAll: plan.request.eraseAll,
                         programs: plan.request.programs
                     };

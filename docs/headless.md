@@ -183,8 +183,8 @@ Build results contain `success`, `buildId` (unique per build), `configHash`,
 `<outDir>/<target>/build-manifest.json`. The compiler database can be fed
 directly to clangd or other language servers.
 
-A successful `flash --dry-run` returns `uploader`, `verify`, `eraseAll`,
-`programs`, and `invocation` — the command object with `executable`, `args`,
+A successful `flash --dry-run` returns `uploader`, `verify` (the verification that will run),
+`eraseAll`, `programs`, and `invocation` — the command object with `executable`, `args`,
 and `script`. `command` carries only the command name.
 
 The repository builds standalone entry scripts at `dist/eide_cli.js` and
