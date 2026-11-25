@@ -218,7 +218,6 @@ export function buildPyOCDCommand(request: PyOCDFlashRequest): FlashCommand {
         args.push('-f', options.frequency);
     }
 
-    let verify = false;
     if (!request.eraseAll) {
         for (const program of programsOf(request, true)) {
             if (/\.bin$/i.test(program.path)) {
@@ -229,10 +228,10 @@ export function buildPyOCDCommand(request: PyOCDFlashRequest): FlashCommand {
                 args.push(program.path);
             }
         }
-        verify = true;
     }
 
-    return { executable, args, verify };
+    // pyOCD's FlashLoader.commit only erases and programs; it performs no read-back verification.
+    return { executable, args, verify: false };
 }
 
 export function buildSTLinkCommand(request: STLinkFlashRequest): FlashCommand {
@@ -430,7 +429,7 @@ export const FLASH_TOOLS: Record<FlashUploaderName, FlashTool> = {
         supported: true,
         program: true,
         eraseAll: true,
-        verify: 'always',
+        verify: 'unsupported',
         readback: false
     }),
     STLink: tool('STLink', {

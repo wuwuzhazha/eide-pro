@@ -329,6 +329,74 @@ async function main(): Promise<void> {
     }
 
     {
+        const runner = new MockRunner(() => ({ code: 0, stdout: '** Verified OK **\n', stderr: '' }));
+        const service = new ProcessFlashService(runner);
+
+        const result = await service.flash({
+            uploader: 'OpenOCD',
+            programs: [{ path: 'E:/build/app.hex' }],
+            options: {
+                executable: 'openocd',
+                interfaceConfig: 'cmsis-dap',
+                targetConfig: 'stm32f4x'
+            }
+        });
+
+        assert(result.success === true, 'service: default request verifies');
+        assert(result.verified === true, 'service: default request reports verification');
+        assertEqual(runner.calls[0].args[5], 'program "E:/build/app.hex" verify',
+            'service: default request passes the verify keyword');
+    }
+
+    {
+        const runner = new MockRunner(() => ({ code: 0, stdout: 'Flash written\n', stderr: '' }));
+        const service = new ProcessFlashService(runner);
+
+        const result = await service.flash({
+            uploader: 'pyOCD',
+            programs: [{ path: 'E:/build/app.hex' }],
+            options: { executable: 'pyocd', target: 'stm32f103rc' }
+        });
+
+        assert(result.success === true, 'service: pyOCD flash succeeds');
+        assert(result.verified === undefined, 'service: pyOCD never claims verification');
+    }
+
+    {
+        const runner = new MockRunner(() => ({ code: 0, stdout: '', stderr: '' }));
+        const service = new ProcessFlashService(runner);
+
+        const result = await service.flash({
+            uploader: 'pyOCD',
+            programs: [{ path: 'E:/build/app.hex' }],
+            verify: true,
+            options: { executable: 'pyocd', target: 'stm32f103rc' }
+        });
+
+        assert(result.success === false, 'service: pyOCD verify request fails');
+        assert(result.code === 'not_supported', 'service: pyOCD verify request code');
+        assert(result.reason?.includes('verification is not supported') === true,
+            'service: pyOCD verify request reason');
+        assert(runner.calls.length === 0, 'service: pyOCD verify request is not executed');
+    }
+
+    {
+        const runner = new MockRunner(() => ({ code: 0, stdout: '', stderr: '' }));
+        const service = new ProcessFlashService(runner);
+
+        const result = await service.flash({
+            uploader: 'JLink',
+            programs: [{ path: 'E:/build/app.hex' }],
+            verify: false,
+            options: { executable: 'JLinkExe', device: 'STM32F103C8' }
+        });
+
+        assert(result.success === false, 'service: JLink verify disable fails');
+        assert(result.code === 'not_supported', 'service: JLink verify disable code');
+        assert(runner.calls.length === 0, 'service: JLink verify disable is not executed');
+    }
+
+    {
         const runner = new MockRunner(() => ({ code: 0, stdout: '', stderr: '' }));
         const service = new ProcessFlashService(runner);
 

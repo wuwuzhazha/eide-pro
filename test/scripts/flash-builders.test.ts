@@ -203,7 +203,16 @@ assertEqual(pyocd.args, [
     'E:/build/app.elf',
     'E:/build/app.bin@0x08000000'
 ], 'pyOCD: program args');
-assert(pyocd.verify === true, 'pyOCD: programming verifies');
+assert(pyocd.verify === false, 'pyOCD: never claims verification');
+
+const pyocdBinWithoutAddress = buildPyOCDCommand({
+    uploader: 'pyOCD',
+    programs: [{ path: 'E:/build/app.bin' }],
+    options: { executable: 'pyocd', target: 'stm32f103rc' }
+});
+assertEqual(pyocdBinWithoutAddress.args, [
+    'flash', '-t', 'stm32f103rc', 'E:/build/app.bin'
+], 'pyOCD: bin without address relies on the documented flash start');
 
 const pyocdErase = buildPyOCDCommand({
     uploader: 'pyOCD',
@@ -445,7 +454,7 @@ assert(openocdCaps.verify === 'optional', 'capabilities: OpenOCD optional verify
 
 const pyocdCaps = getFlashCapabilities('pyOCD');
 assert(pyocdCaps.eraseAll === true, 'capabilities: pyOCD erase-all');
-assert(pyocdCaps.verify === 'always', 'capabilities: pyOCD always verifies');
+assert(pyocdCaps.verify === 'unsupported', 'capabilities: pyOCD cannot verify');
 
 const stlinkCaps = getFlashCapabilities('STLink');
 assert(stlinkCaps.eraseAll === true, 'capabilities: STLink erase-all');
