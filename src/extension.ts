@@ -45,6 +45,7 @@ import {
     txt_install_now, txt_yes, view_str$prompt$feedback, rating_text, later_text,
     view_str$prompt$install_dotnet_and_restart_vscode,
     view_str$prompt$install_dotnet_failed,
+    view_str$prompt$binaries_not_installed,
     view_str$prompt$mcp_server_disabled,
     view_str$prompt$mcp_reconnected,
     view_str$prompt$mcp_reconnect_failed,
@@ -77,6 +78,24 @@ const extension_deps: string[] = [];
 let projectExplorer: ProjectExplorer;
 let operationExplorer: OperationExplorer;
 
+// degraded activation state
+let binariesReady: boolean = false; // eide binaries are installed on disk
+let componentsInitDone: boolean = false; // post-binaries component init has completed
+
+/**
+ * Wrap a build/flash command handler: when the eide binaries are not installed,
+ * reject the command with a clear message instead of running it.
+*/
+function withBinariesRequired<T extends (...args: never[]) => unknown>(handler: T): T {
+    return ((...args: never[]) => {
+        if (!binariesReady) {
+            vscode.window.showErrorMessage(view_str$prompt$binaries_not_installed);
+            return;
+        }
+        return handler(...args);
+    }) as T;
+}
+
 const TOOLING_PROMPT_DISMISSED_KEY = 'eide.toolingPromptDismissedVersion';
 const toolingProbeTimeoutMs = 5000;
 const toolingVerifyTimeoutMs = 10000;
@@ -89,6 +108,11 @@ const retryableNetworkMessages = [
     'ssl3_read_bytes',
     'socket hang up'
 ];
+
+// explicit bounds for the .NET6 runtime check/install in checkAndInstallRuntime
+const dotnetListRuntimesTimeoutMs = 60 * 1000;
+const dotnetInstallerDownloadTimeoutMs = 30 * 1000;
+const dotnetInstallerRunTimeoutMs = 10 * 60 * 1000;
 
 type ToolingDownload = (url: string, dest: string) => Promise<void>;
 
@@ -394,12 +418,50 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    // init eide components
-    const done = await InitComponents(context);
-    if (!done) {
-        vscode.window.showErrorMessage(`${ERROR} : Install eide binaries failed !, You can download offline [vsix package](https://github.com/wuwuzhazha/eide-pro/releases) and install it !`);
-        return;
+    // init managers
+    const resManager = ResManager.GetInstance(context);
+    SettingManager.GetInstance(context);
+    LogDumper.getInstance();
+
+    // set exec permission for built-in tools
+    if (os.platform() != 'win32') {
+
+        const exelist: string[] = [
+            resManager.Get7za().path,
+        ];
+
+        const qjsExe = resManager.getBuiltInQjsExe();
+        if (qjsExe) {
+            exelist.push(qjsExe.path);
+        }
+
+        new File(resManager.getUnifyBuilderExe().dir)
+            .GetList(undefined, File.EXCLUDE_ALL_FILTER)
+            .forEach((f) => {
+                if (!f.suffix) { // nosuffix file is an exe file
+                    exelist.push(f.path);
+                }
+            });
+
+        try {
+            for (const exePath of exelist) {
+                try {
+                    fs.accessSync(exePath, fs.constants.R_OK | fs.constants.X_OK);
+                } catch (error) {
+                    const cmd = `chmod +x "${exePath}"`;
+                    GlobalEvent.emit('globalLog.append', cmd + os.EOL);
+                    ChildProcess.execSync(cmd);
+                }
+            }
+        } catch (error) {
+            GlobalEvent.log_error(error);
+            GlobalEvent.emit('globalLog.show');
+        }
     }
+
+    // init explorers
+    operationExplorer = new OperationExplorer(context);
+    projectExplorer = new ProjectExplorer(context);
 
     // register vscode commands
     const subscriptions = context.subscriptions;
@@ -434,7 +496,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // TODO
 
     // operations
-    operationExplorer = new OperationExplorer(context);
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.Open', () => operationExplorer.OnOpenProject()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.Create', () => operationExplorer.OnCreateProject()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.Import', () => operationExplorer.OnImportProject()));
@@ -450,22 +511,21 @@ export async function activate(context: vscode.ExtensionContext) {
     subscriptions.push(vscode.commands.registerCommand('eide.operation.open_project', () => operationExplorer.OnOpenProject()));
 
     // projects
-    projectExplorer = new ProjectExplorer(context);
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.build', () => projectExplorer.buildWorkspace()));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.rebuild', () => projectExplorer.buildWorkspace(true)));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.build', withBinariesRequired(() => projectExplorer.buildWorkspace())));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.rebuild', withBinariesRequired(() => projectExplorer.buildWorkspace(true))));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.open.config', () => projectExplorer.openWorkspaceConfig()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.workspace.make.template', (item) => projectExplorer.ExportProjectTemplate(undefined, true)));
 
     // project user cmds
     subscriptions.push(vscode.commands.registerCommand('eide.project.save', (item) => projectExplorer.saveProject(item)));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.rebuild', (item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item))));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.build', (item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true })));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.clean', (item) => projectExplorer.cleanProject(projectExplorer.getProjectByTreeItem(item))));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.uploadToDevice', (item) => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem(item))));
-    subscriptions.push(vscode.commands.registerCommand('eide.reinstall.binaries', () => checkAndInstallBinaries(true)));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.flash.erase.all', (item) => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem(item), true)));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.buildAndFlash', (item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true, flashAfterBuild: true })));
-    subscriptions.push(vscode.commands.registerCommand('eide.project.genBuilderParams', (item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true, onlyDumpBuilderParams: true })));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.rebuild', withBinariesRequired((item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item)))));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.build', withBinariesRequired((item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true }))));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.clean', withBinariesRequired((item) => projectExplorer.cleanProject(projectExplorer.getProjectByTreeItem(item)))));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.uploadToDevice', withBinariesRequired((item) => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem(item)))));
+    subscriptions.push(vscode.commands.registerCommand('eide.reinstall.binaries', () => installBinariesAndFinish(context)));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.flash.erase.all', withBinariesRequired((item) => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem(item), true))));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.buildAndFlash', withBinariesRequired((item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true, flashAfterBuild: true }))));
+    subscriptions.push(vscode.commands.registerCommand('eide.project.genBuilderParams', withBinariesRequired((item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { notRebuild: true, onlyDumpBuilderParams: true }))));
     subscriptions.push(vscode.commands.registerCommand('eide.open.makelibs.cfg', (item) => projectExplorer.openLibsGeneratorConfig(item)));
     subscriptions.push(vscode.commands.registerCommand('eide.project.create_sys_stubs', (projuid) => projectExplorer.createSysStubs(projuid)));
 
@@ -474,7 +534,7 @@ export async function activate(context: vscode.ExtensionContext) {
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.clearHistoryRecord', () => projectExplorer.clearAllHistoryRecords()));
 
     // project
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.showBuildParams', (item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { onlyDumpCompilerInfo: true })));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.showBuildParams', withBinariesRequired((item) => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(item), { onlyDumpCompilerInfo: true }))));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.setActive', (item) => projectExplorer.setActiveProject(item)));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.close', (item) => projectExplorer.Close(item)));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.saveAll', () => projectExplorer.SaveAll()));
@@ -505,7 +565,7 @@ export async function activate(context: vscode.ExtensionContext) {
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.virtual_file_remove', (item, items) => projectExplorer.Virtual_removeFile(item, items)));
 
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.file.modify.extraArgs', (item) => projectExplorer.modifyExtraCompilerArgs('file', item)));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.file.compile', (item) => projectExplorer.compileSingleFile(item)));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.file.compile', withBinariesRequired((item) => projectExplorer.compileSingleFile(item))));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.folder.modify.extraArgs', (item) => projectExplorer.modifyExtraCompilerArgs('folder', item)));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.copyPath', (item) => projectExplorer.copyPath('abs', item)));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.project.source.copyRelativePath', (item) => projectExplorer.copyPath('relative', item)));
@@ -580,8 +640,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // status bar
     //subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.switch-project', () => projectExplorer.showQuickPickAndSwitchActiveProject()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.switch-target', () => projectExplorer.switchTarget()));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.build', () => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(), { notRebuild: true })));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.flash', () => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem())));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.build', withBinariesRequired(() => projectExplorer.buildProject(projectExplorer.getProjectByTreeItem(), { notRebuild: true }))));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.statusbar.flash', withBinariesRequired(() => projectExplorer.programFlashProject(projectExplorer.getProjectByTreeItem()))));
 
     // debug config providers
     vscode.debug.registerDebugConfigurationProvider('cortex-debug', new ExternalDebugConfigProvider('cortex-debug'),
@@ -598,6 +658,18 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.workspace.registerTaskProvider(EideTaskProvider.TASK_TYPE_BASH, new EideTaskProvider());
     vscode.languages.registerCodeActionsProvider({ scheme: 'file', pattern: '**/compiler.log' }, 
         new CompilerLogCodeActionProvider(), { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] });
+
+    // init eide components
+    const done = await InitComponents(context);
+    if (!done) {
+        // degraded mode: binaries are not installed, but all commands stay
+        // available; build/flash commands report a clear error until reinstall succeeds
+        const msg = `${ERROR} : Install eide binaries failed !, You can download offline [vsix package](https://github.com/wuwuzhazha/eide-pro/releases) and install it !`;
+        const sel = await vscode.window.showErrorMessage(msg, 'Retry', 'Cancel');
+        if (sel === 'Retry') {
+            await installBinariesAndFinish(context);
+        }
+    }
 
     // auto save project
     projectExplorer.enableAutoSave(true);
@@ -1327,7 +1399,7 @@ async function checkAndInstallRuntime() {
     try {
         GlobalEvent.log_info('Checking .NET runtime ...');
         GlobalEvent.log_info(`Exec cmd: '${dotnetCmd} --list-runtimes'`);
-        const dotnetInfo = ChildProcess.execFileSync(dotnetCmd, ['--list-runtimes'], { windowsHide: true })
+        const dotnetInfo = ChildProcess.execFileSync(dotnetCmd, ['--list-runtimes'], { windowsHide: true, timeout: dotnetListRuntimesTimeoutMs })
             .toString().trim();
         GlobalEvent.emit('globalLog.append', dotnetInfo + os.EOL);
         // check dotnet version
@@ -1410,7 +1482,7 @@ async function checkAndInstallRuntime() {
                         cancellable: false
                     }, async (progress, token): Promise<boolean> => {
 
-                        const res = await utility.downloadFileWithProgress(downloadUrl, pkgFile.name, progress, token);
+                        const res = await utility.downloadFileWithProgress(downloadUrl, pkgFile.name, progress, token, dotnetInstallerDownloadTimeoutMs);
 
                         if (res instanceof Buffer) {
                             try {
@@ -1432,7 +1504,7 @@ async function checkAndInstallRuntime() {
 
             if (pkgReady && pkgFile.IsFile()) {
                 try {
-                    ChildProcess.execFileSync(pkgFile.path);
+                    ChildProcess.execFileSync(pkgFile.path, { timeout: dotnetInstallerRunTimeoutMs });
                     vscode.window.showInformationMessage(view_str$prompt$install_dotnet_and_restart_vscode);
                 } catch (error) {
                     GlobalEvent.emit('msg', newMessage('Error', view_str$prompt$install_dotnet_failed));
@@ -1449,51 +1521,30 @@ async function checkAndInstallRuntime() {
 
 async function InitComponents(context: vscode.ExtensionContext): Promise<boolean | undefined> {
 
-    // init managers
-    const resManager = ResManager.GetInstance(context);
-    const settingManager = SettingManager.GetInstance(context);
-
-    LogDumper.getInstance();
-
-    // set exec permission for built-in tools
-    if (os.platform() != 'win32') {
-
-        const exelist: string[] = [
-            resManager.Get7za().path,
-        ];
-
-        const qjsExe = resManager.getBuiltInQjsExe();
-        if (qjsExe) {
-            exelist.push(qjsExe.path);
-        }
-
-        new File(resManager.getUnifyBuilderExe().dir)
-            .GetList(undefined, File.EXCLUDE_ALL_FILTER)
-            .forEach((f) => {
-                if (!f.suffix) { // nosuffix file is an exe file
-                    exelist.push(f.path);
-                }
-            });
-
-        try {
-            for (const exePath of exelist) {
-                try {
-                    fs.accessSync(exePath, fs.constants.R_OK | fs.constants.X_OK);
-                } catch (error) {
-                    const cmd = `chmod +x "${exePath}"`;
-                    GlobalEvent.emit('globalLog.append', cmd + os.EOL);
-                    ChildProcess.execSync(cmd);
-                }
-            }
-        } catch (error) {
-            GlobalEvent.log_error(error);
-            GlobalEvent.emit('globalLog.show');
-        }
-    }
-
     /* check binaries, if not found, install it ! */
     const done = await checkAndInstallBinaries();
     if (!done) { return false; } /* exit if failed */
+
+    binariesReady = true;
+
+    // complete the remaining component initialization
+    await finishComponentInit(context);
+
+    return true;
+}
+
+/**
+ * Complete the component initialization that depends on the eide binaries
+ * (env export, status bar, terminal profiles, providers).
+ * Re-entrant: runs exactly once, also after a successful binaries reinstall.
+*/
+async function finishComponentInit(context: vscode.ExtensionContext): Promise<void> {
+
+    if (componentsInitDone) { return; }
+
+    try {
+
+    const settingManager = SettingManager.GetInstance();
 
     // binaries patchs
     await patchBinaries();
@@ -1554,6 +1605,26 @@ async function InitComponents(context: vscode.ExtensionContext): Promise<boolean
     // terminal link providers
     context.subscriptions.push(
         vscode.window.registerTerminalLinkProvider(new EideTerminalLinkProvider()));
+
+    } catch (error) {
+        GlobalEvent.log_error(error);
+    }
+
+    componentsInitDone = true;
+}
+
+/**
+ * Reinstall the eide binaries and, on success, complete the remaining
+ * component initialization (recovery path from the degraded activation state).
+*/
+async function installBinariesAndFinish(context: vscode.ExtensionContext): Promise<boolean> {
+
+    const done = await checkAndInstallBinaries(true);
+    if (!done) { return false; }
+
+    binariesReady = true;
+
+    await finishComponentInit(context);
 
     return true;
 }

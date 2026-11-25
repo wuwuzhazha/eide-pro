@@ -514,6 +514,11 @@ export const view_str$prompt$install_dotnet_failed = [
     `Fail to install [.NET6 runtime](https://dotnet.microsoft.com/en-us/download/dotnet/6.0), you need install it manually !`
 ][langIndex];
 
+export const view_str$prompt$binaries_not_installed = [
+    `EIDE 二进制文件未安装，请运行 'EIDE: Reinstall binaries' 或检查你的网络！`,
+    `EIDE binaries are not installed. Run 'EIDE: Reinstall binaries' or check your network.`
+][langIndex];
+
 export const view_str$prompt$loadws_cfg_failed = [
     `加载VSCode工作区配置失败！请检查文件 {} 格式是否正确！`,
     `Load workspace configuration failed ! Please check your {} file.`
