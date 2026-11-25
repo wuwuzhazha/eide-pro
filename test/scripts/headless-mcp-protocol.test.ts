@@ -79,7 +79,9 @@ async function run(): Promise<void> {
             `protocol: server website points to EIDE Pro (${JSON.stringify(handshake)})`);
 
         const tools = await client.listTools();
-        assert(tools.tools.length === 42, 'protocol: exposes 42 tools');
+        assert(tools.tools.length === 43, 'protocol: exposes 43 tools');
+        assert(tools.tools.some((tool: any) => tool.name === 'eide_get_environment'),
+            'protocol: environment tool is exposed');
         assert(tools.tools.some((tool: any) => tool.name === 'eide_debug_connect'),
             'protocol: debug tools are exposed');
         assert(tools.tools.some((tool: any) => tool.name === 'eide_debug_backtrace'),

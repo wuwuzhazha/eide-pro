@@ -161,6 +161,19 @@ export function createMcpServer(
     );
 
     server.registerTool(
+        'eide_get_environment',
+        {
+            title: 'Get Environment',
+            description: 'Resolve tool paths in order: EIDE settings, --toolchain-path, project config, PATH, xpack. A not-found result means all of these sources were searched.',
+            inputSchema: {
+                uid: uidSchema,
+                target: z.string().optional().describe('Target name (defaults to the active target).')
+            }
+        },
+        async (args) => delegateToolCall('eide_get_environment', args)
+    );
+
+    server.registerTool(
         'eide_switch_target',
         {
             title: 'Switch Target',

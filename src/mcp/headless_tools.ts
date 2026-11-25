@@ -12,6 +12,8 @@ import { HeadlessDebugSession } from './headless_debug';
 import { HeadlessProject } from './headless_project';
 import { classifyError, createCommandKernel, CommandResult } from '../core/command_kernel';
 import { ConfigError } from '../core/errors';
+import { loadHeadlessSettings, findExtensionRoot } from '../headless/settings';
+import { resolveToolchainEnvironment } from '../core/toolchain_env';
 
 const DEFAULT_TOOL_WATCHDOG_MS = 120_000;
 const TOOL_TIMEOUT_GRACE_MS = 30_000;
@@ -245,6 +247,21 @@ class HeadlessToolRunner {
                     actived: project.getTargetName(),
                     targets: project.getTargetNames()
                 });
+            case 'eide_get_environment': {
+                const snapshot = project.getSnapshot();
+                const extensionRoot = this.options.extensionRoot ?? findExtensionRoot(this.options.resourcesDir);
+                const settings = loadHeadlessSettings(extensionRoot, undefined, this.options.settingsFile).values;
+                const report = resolveToolchainEnvironment({
+                    projectPath: snapshot.projectPath,
+                    target: args.target === undefined ? snapshot.target : readOptionalString(args.target, 'target'),
+                    type: snapshot.type,
+                    toolchain: snapshot.toolchain,
+                    settings,
+                    toolchainPath: this.options.toolchainPath,
+                    resourcesDir: this.options.resourcesDir
+                });
+                return makeToolResult(report);
+            }
             case 'eide_switch_target': {
                 const targetName = typeof args.targetName === 'string' ? args.targetName : '';
                 project.selectTarget(targetName);
