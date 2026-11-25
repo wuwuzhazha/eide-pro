@@ -35,6 +35,7 @@ All notable version changes will be recorded in this file.
   - In single-project headless mode, `uid` is optional in tool arguments; when supplied, it must still match the loaded project.
   - The VSIX excludes internal task/process notes and the local `lib/node-utility` copy; release packaging verifies VSIX contents against tracked files.
   - Removed the dead `EIDE.Option.EnableTelemetry` setting and replaced upstream/offline-help links with EIDE Pro's GitHub links; the feedback prompt no longer offers the upstream sponsor button.
+  - The IAR/Segger project importer runs on the QuickJS runtime bundled in `res/scripts` instead of the downloaded `~/.eide/bin/scripts`; it reports an explicit error on platforms without a bundled runtime (macOS).
 
 **Docs**:
   - Refreshed English and Chinese READMEs, the headless guide, and the MCP skill for agent debugging, the unified tool surface, environment lookup, tool results, and EIDE Pro's HTTP MCP configuration example.
