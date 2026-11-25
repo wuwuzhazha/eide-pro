@@ -70,6 +70,7 @@ import { VirtualDocument } from './VirtualDocsProvider';
 import * as utility from './utility';
 import * as platform from './Platform';
 import { EXTENSION_ID } from './ExtensionInfo';
+import { probeCommand, probeProcessOutput } from './core/command_probe';
 
 const extension_deps: string[] = [];
 
@@ -191,30 +192,41 @@ export async function maybePromptToolingInstall(deps: ToolingPromptDeps): Promis
     }
 }
 
-function execToolingProbe(file: string, args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-        ChildProcess.execFile(file, args,
-            { timeout: toolingProbeTimeoutMs, windowsHide: true, encoding: 'utf8' },
-            (error, stdout) => error ? reject(error) : resolve(stdout));
-    });
-}
-
 async function probeToolingCliVersion(): Promise<string | undefined> {
-    try {
-        const stdout = await execToolingProbe('eide-cli', ['--version']);
-        const match = /(\d+\.\d+\.\d+[^\s]*)/.exec(stdout);
-        return match ? match[1] : undefined;
-    } catch {
-        return undefined;
+    const result = await probeCommand('eide-cli', ['--version'], {
+        platform: process.platform,
+        timeoutMs: toolingProbeTimeoutMs
+    });
+    if (result.status === 'ok') {
+        return result.value;
     }
+    if (result.status === 'failed') {
+        GlobalEvent.log_warn(`eide-cli probe failed: ${result.message}`);
+    }
+    return undefined;
 }
 
 async function probeToolingNodeVersion(): Promise<string | undefined> {
-    try {
-        return (await execToolingProbe('node', ['--version'])).trim();
-    } catch {
-        return undefined;
+    const result = await probeCommand('node', ['--version'], {
+        platform: process.platform,
+        timeoutMs: toolingProbeTimeoutMs
+    });
+    if (result.status === 'ok') {
+        return result.value.replace(/^v/, '');
     }
+    if (result.status === 'failed') {
+        GlobalEvent.log_warn(`node probe failed: ${result.message}`);
+    }
+    return undefined;
+}
+
+function probeToolingVerifyResult(result: { code: number; stdout: string; stderr: string }): boolean {
+    const probe = probeProcessOutput(result);
+    if (probe.status === 'failed') {
+        GlobalEvent.log_warn(`eide-cli verification failed: ${probe.message}`);
+        return false;
+    }
+    return probe.status === 'ok';
 }
 
 function probeToolingDotnetMajor(): number | undefined {
@@ -305,8 +317,12 @@ async function installTooling(
                         ? view_str$prompt$tooling_step_verify
                         : view_str$prompt$tooling_step_install
                 });
-                return runToolingCommand(file, args,
+                const output = await runToolingCommand(file, args,
                     file === 'eide-cli' ? Math.min(timeoutMs, toolingVerifyTimeoutMs) : timeoutMs);
+                if (file === 'eide-cli' && !probeToolingVerifyResult(output)) {
+                    return { ...output, code: 1 };
+                }
+                return output;
             }
         });
     });
