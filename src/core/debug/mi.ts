@@ -401,6 +401,11 @@ export type MiRemoteMode = 'remote' | 'extended-remote';
 
 export type MiStopEvent = MiAsyncRecord & { class: 'stopped' };
 
+interface SequencedStop {
+    sequence: number;
+    event: MiStopEvent;
+}
+
 export interface MiBreakpointOptions {
     hardware?: boolean;
     condition?: string;
@@ -498,6 +503,7 @@ interface PendingCommand {
 }
 
 interface StopWaiter {
+    minSequence: number;
     resolve: (event: MiStopEvent) => void;
     reject: (error: Error) => void;
     timer: NodeJS.Timeout;
@@ -515,8 +521,10 @@ export class MiSession {
 
     private readonly parser = new MiRecordParser();
     private readonly pendingCommands = new Map<number, PendingCommand>();
-    private readonly stopQueue: MiStopEvent[] = [];
+    private readonly stopQueue: SequencedStop[] = [];
     private readonly stopWaiters: StopWaiter[] = [];
+    private stopSequence = 0;
+    private resumeMinSequence = 0;
 
     private process?: MiChildProcess;
     private started = false;
@@ -842,18 +850,22 @@ export class MiSession {
     }
 
     async continue(): Promise<void> {
+        this.resumeMinSequence = this.stopSequence + 1;
         await this.runCommand('-exec-continue', ['running', 'done']);
     }
 
     async stepOver(): Promise<void> {
+        this.resumeMinSequence = this.stopSequence + 1;
         await this.runCommand('-exec-next', ['running', 'done']);
     }
 
     async stepInto(): Promise<void> {
+        this.resumeMinSequence = this.stopSequence + 1;
         await this.runCommand('-exec-step', ['running', 'done']);
     }
 
     async stepOut(): Promise<void> {
+        this.resumeMinSequence = this.stopSequence + 1;
         await this.runCommand('-exec-finish', ['running', 'done']);
     }
 
@@ -861,13 +873,19 @@ export class MiSession {
         await this.runCommand('-exec-interrupt', ['done']);
     }
 
-    waitForStop(timeoutMs: number = this.stopTimeoutMs): Promise<MiStopEvent> {
+    waitForStop(
+        timeoutMs: number = this.stopTimeoutMs,
+        minSequence: number = this.consumeResumeMinSequence(),
+    ): Promise<MiStopEvent> {
         if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
             return Promise.reject(new MiError('state', 'stop timeout must be a positive integer'));
         }
+        while (this.stopQueue.length > 0 && this.stopQueue[0].sequence < minSequence) {
+            this.stopQueue.shift();
+        }
         const queued = this.stopQueue.shift();
         if (queued !== undefined) {
-            return Promise.resolve(queued);
+            return Promise.resolve(queued.event);
         }
         if (this.closed || this.exitInfo !== undefined) {
             return Promise.reject(new MiError('exited', 'GDB session is closed before the target stopped'));
@@ -885,7 +903,7 @@ export class MiSession {
                     ),
                 );
             }, timeoutMs);
-            this.stopWaiters.push({ resolve, reject, timer });
+            this.stopWaiters.push({ minSequence, resolve, reject, timer });
         });
     }
 
@@ -1071,13 +1089,22 @@ export class MiSession {
     }
 
     private publishStop(record: MiStopEvent): void {
-        const waiter = this.stopWaiters.shift();
+        const sequence = ++this.stopSequence;
+        const event = { sequence, event: record };
+        const index = this.stopWaiters.findIndex(waiter => sequence >= waiter.minSequence);
+        const waiter = index === -1 ? undefined : this.stopWaiters.splice(index, 1)[0];
         if (waiter !== undefined) {
             clearTimeout(waiter.timer);
             waiter.resolve(record);
             return;
         }
-        this.stopQueue.push(record);
+        this.stopQueue.push(event);
+    }
+
+    private consumeResumeMinSequence(): number {
+        const minSequence = this.resumeMinSequence;
+        this.resumeMinSequence = 0;
+        return minSequence;
     }
 
     private handleStderr(chunk: string): void {

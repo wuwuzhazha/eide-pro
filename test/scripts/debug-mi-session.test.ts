@@ -533,6 +533,25 @@ async function testStopsAndInterrupt(): Promise<void> {
     assertEqual(exitWaitFailure.code, 'exited', 'process exit rejects stop wait');
 }
 
+async function testContinueIgnoresStaleStop(): Promise<void> {
+    const harness = createHarness((command, token) => {
+        if (command === '-exec-continue') {
+            return `${token}^running\n*running,thread-id="all"\n`;
+        }
+        return standardResponse(command, token);
+    });
+    await harness.session.connect('localhost:3333');
+    harness.fake.emitStdout('*stopped,reason="stale",frame={level="0",addr="0x08000018",func="Reset_Handler"},thread-id="1"\n');
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="breakpoint-hit",frame={level="0",addr="0x08000008",func="main",line="6"},thread-id="1"\n');
+    const stop = await harness.session.waitForStop(100);
+    assertEqual(stop.results.reason, 'breakpoint-hit', 'continue ignores stale stop');
+    const frame = stop.results.frame;
+    assert(frame !== null && typeof frame === 'object' && !Array.isArray(frame), 'fresh stop frame');
+    assertEqual((frame as { func: string }).func, 'main', 'fresh stop frame function');
+    await harness.session.disconnect();
+}
+
 async function testCommandFailureModes(): Promise<void> {
     const exitDuringCommand = createHarness((command, token, fake) => {
         if (command.startsWith('-data-evaluate-expression ')) {
@@ -754,6 +773,7 @@ async function run(): Promise<void> {
     await testThreadsFramesAndVariables();
     await testStepping();
     await testStopsAndInterrupt();
+    await testContinueIgnoresStaleStop();
     await testCommandFailureModes();
     console.log('debug-mi-session tests passed');
 }
