@@ -51,6 +51,9 @@ async function run(): Promise<void> {
     fs.mkdirSync(toolchain, { recursive: true });
 
     const serverPath = NodePath.resolve(__dirname, '../../../../dist/eide_mcp.js');
+    if (!fs.existsSync(serverPath)) {
+        throw new Error(`Missing ${serverPath}. Run "npm run vscode:prepublish" before the tests.`);
+    }
     const transport = new StdioClientTransport({
         command: process.execPath,
         args: [
