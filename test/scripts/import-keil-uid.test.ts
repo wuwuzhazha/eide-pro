@@ -6,7 +6,7 @@ const yaml = require('yaml');
 require('../../../src/headless/vscode').installVscodeShim();
 
 const { ProjectConfiguration } = require('../../../src/EIDETypeDefine');
-const { ensureProjectUid } = require('../../../src/EIDEProjectExplorer');
+const { ensureProjectUid, initTemplateProjectConfig } = require('../../../src/EIDEProjectExplorer');
 const { newProjectUid } = require('../../../src/core/project_uid');
 const { KeilParser } = require('../../../src/KeilXmlParser');
 const { openHeadlessProject } = require('../../../src/headless/host');
@@ -113,6 +113,23 @@ async function run(): Promise<void> {
     ensureProjectUid(prjConfig);
     assert(prjConfig.config.miscInfo.uid === saved.miscInfo.uid,
         'import: existing uid is preserved on re-initialization');
+
+    const templateDir = NodePath.join(root, 'template');
+    const templateEide = NodePath.join(templateDir, '.eide', 'eide.yml');
+    fs.mkdirSync(NodePath.join(templateDir, '.eide'), { recursive: true });
+    fs.writeFileSync(templateEide, yaml.stringify({
+        ...projectConfig(),
+        name: 'template-project',
+        miscInfo: { uid: 'stale-template-uid' }
+    }));
+
+    initTemplateProjectConfig(File.from(templateEide), 'created-from-template');
+    const templated = yaml.parse(fs.readFileSync(templateEide, 'utf8'));
+    assert(typeof templated.miscInfo.uid === 'string' && templated.miscInfo.uid.length > 0
+        && templated.miscInfo.uid !== 'stale-template-uid',
+        `template: persisted eide.yml gets a fresh uid (${templated.miscInfo.uid})`);
+    assert(templated.name === 'created-from-template',
+        `template: project name is applied (${templated.name})`);
 
     const withUid = await openError();
     assert(!withUid.includes('requires an initialized project with miscInfo.uid'),

@@ -161,6 +161,13 @@ export function ensureProjectUid(prjConfig: ProjectConfiguration<any>): void {
     }
 }
 
+export function initTemplateProjectConfig(pfile: File, projectName: string): void {
+    const prjConf = ProjectConfiguration.parseProjectFile(pfile.Read());
+    prjConf.name = projectName;
+    prjConf.miscInfo = { uid: newProjectUid(pfile.dir) };
+    pfile.Write(ProjectConfiguration.dumpProjectFile(prjConf));
+}
+
 enum TreeItemType {
     SOLUTION,
     PROJECT,
@@ -2917,10 +2924,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
                                     try {
                                         await doMigration(targetDir);
                                         const pfile = File.from(targetDir.path, AbstractProject.EIDE_DIR, AbstractProject.prjConfigName);
-                                        const prjConf = ProjectConfiguration.parseProjectFile(pfile.Read());
-                                        prjConf.name = option.name; // set project name
-                                        if (prjConf.miscInfo) prjConf.miscInfo.uid = undefined; // reset uid
-                                        pfile.Write(ProjectConfiguration.dumpProjectFile(prjConf));
+                                        initTemplateProjectConfig(pfile, option.name);
                                     } catch (error) {
                                         throw Error(`Init project failed !, msg: ${error.message}`);
                                     }

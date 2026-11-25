@@ -1,5 +1,4 @@
 import * as child_process from 'child_process';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as NodePath from 'path';
 import * as yaml from 'yaml';
@@ -9,6 +8,7 @@ import {
     needsProjectConfigMigration
 } from '../core/project_config_migration';
 import { CliUsageError, ConfigError } from '../core/errors';
+import { newProjectUid } from '../core/project_uid';
 
 export interface HeadlessTemplate {
     name: string;
@@ -188,7 +188,7 @@ export function createProject(options: CreateProjectOptions): CreateProjectResul
     config.version = CURRENT_CONFIG_VERSION;
     config.name = options.projectName || name;
     config.miscInfo = config.miscInfo || {};
-    const uid = crypto.randomBytes(16).toString('hex');
+    const uid = newProjectUid(NodePath.join(projectPath, '.eide'));
     config.miscInfo.uid = uid;
 
     const ymlFile = NodePath.join(projectPath, '.eide', 'eide.yml');
