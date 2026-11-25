@@ -12,9 +12,18 @@ if (!fs.existsSync(cardPath)) {
 }
 
 const lines = fs.readFileSync(cardPath, 'utf8').split('\n');
-const failures = [];
-let pathCount = 0;
-let baseline = null;
+const headerLine = lines.findIndex(line => line.trim() === '## 派单校验');
+if (headerLine === -1) {
+    console.error(`${cardPath}:missing "## 派单校验" block`);
+    process.exit(1);
+}
+
+const fenceStart = lines.findIndex((line, i) => i > headerLine && line.trim().startsWith('```'));
+const fenceEnd = lines.findIndex((line, i) => i > fenceStart && line.trim() === '```');
+if (fenceStart === -1 || fenceEnd === -1) {
+    console.error(`${cardPath}:${headerLine + 1}  missing fenced block after "## 派单校验"`);
+    process.exit(1);
+}
 
 function gitOk(args) {
     try {
@@ -25,35 +34,38 @@ function gitOk(args) {
     }
 }
 
-lines.forEach((line, index) => {
-    const lineNo = index + 1;
-    const isNew = line.includes('（新）');
-    const pathMatches = [...line.matchAll(/`([^`]+)`/g)].map(match => match[1])
-        .filter(candidate => /^(src|test|scripts|docs|\.github|\.tasks|res)\/[^`]*$/.test(candidate)
-            || candidate === 'package.json' || candidate === '.gitignore');
-    for (const candidate of pathMatches) {
-        pathCount++;
-        if (isNew) {
-            continue;
-        }
-        if (!gitOk(['ls-files', '--error-unmatch', candidate])) {
-            failures.push(`${cardPath}:${lineNo}  path not tracked: ${candidate}`);
-        }
+const failures = [];
+let pathCount = 0;
+let baseline = null;
+
+for (let i = fenceStart + 1; i < fenceEnd; i++) {
+    const lineNo = i + 1;
+    const line = lines[i].trim();
+    if (line === '') {
+        continue;
     }
-    const baselineMatch = line.match(/基线[：:]`([0-9a-f]{7,40})`/);
-    if (baselineMatch) {
-        baseline = baselineMatch[1];
+    const pathMatch = line.match(/^path: (\S+?)(?: \((新|new)\))?$/);
+    const baseMatch = line.match(/^base: ([0-9a-f]{7,40})$/);
+    if (baseMatch) {
+        baseline = baseMatch[1];
         if (!gitOk(['cat-file', '-e', `${baseline}^{commit}`])) {
             failures.push(`${cardPath}:${lineNo}  baseline is not a commit: ${baseline}`);
         } else if (!gitOk(['merge-base', '--is-ancestor', baseline, 'HEAD'])) {
             failures.push(`${cardPath}:${lineNo}  baseline is not an ancestor of HEAD: ${baseline}`);
         }
+    } else if (pathMatch) {
+        pathCount++;
+        const candidate = pathMatch[1];
+        if (!pathMatch[2] && !gitOk(['ls-files', '--error-unmatch', candidate])) {
+            failures.push(`${cardPath}:${lineNo}  path not tracked: ${candidate}`);
+        }
+    } else {
+        failures.push(`${cardPath}:${lineNo}  unrecognized line in verification block: ${line}`);
     }
-});
+}
 
-if (pathCount === 0 && baseline === null) {
-    console.error(`${cardPath}: no repository paths or baseline found in card`);
-    process.exit(1);
+if (baseline === null) {
+    failures.push(`${cardPath}:${headerLine + 1}  verification block has no base: line`);
 }
 
 if (failures.length > 0) {
@@ -63,4 +75,4 @@ if (failures.length > 0) {
     process.exit(1);
 }
 
-console.log(`task card verified: ${pathCount} paths, base ${baseline ?? 'none'}`);
+console.log(`task card verified: ${pathCount} paths, base ${baseline}`);

@@ -23,9 +23,26 @@ incident record is dropped when memory fades.
 
 ## Checks
 
-Dispatch: `npm run check:task-card -- <card.md>` — verifies every
-backtick-quoted repository path exists (paths marked （新） are new files and
-skip the check) and that `基线：<sha>` names a real ancestor of HEAD.
+Dispatch: `npm run check:task-card -- <card.md>` — validates the card's
+verification block only. Prose may mention paths freely; anything outside the
+block is not checked. The block sits at the end of the card:
+
+````
+## 派单校验
+```
+base: ead8d57
+path: src/core/foo.ts
+path: docs/new-file.md (新)
+```
+````
+
+Paths marked `(新)`（or `(new)`） are created by the task and skip the
+tracked-path check; every other `path:` must already be tracked in git.
+`base:` must name a real commit that is an ancestor of HEAD. Unknown lines,
+a missing block, or a missing base are errors.
+Incident: the first verifier scanned backticked paths across the whole card
+and reported 6 false positives on example and intentionally-broken paths on
+its first use (PROC-1).
 
 Delivery: `npm run check:branch` — fetches the remote and reports the branch
 name, how far behind `origin/dev` you are, uncommitted files, and whether you
