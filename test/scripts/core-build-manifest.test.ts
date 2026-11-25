@@ -39,11 +39,18 @@ assert(changed !== id1, 'manifest: config hash changes with overrides');
 const baseDir = NodePath.join(os.tmpdir(), `eide-manifest-${process.pid}-${Date.now()}`);
 try {
     fs.mkdirSync(baseDir, { recursive: true });
-    for (const name of ['firmware.elf', 'firmware.hex', 'firmware.bin', 'firmware.map', 'notes.txt']) {
+    for (const name of ['firmware.elf', 'firmware.hex', 'firmware.bin', 'firmware.map',
+        'firmware.ihx', 'firmware.rel', 'notes.txt']) {
         fs.writeFileSync(NodePath.join(baseDir, name), 'x');
     }
     const artifacts = collectArtifacts(baseDir);
-    assert(artifacts.length === 4, 'manifest: collects known artifacts');
+    assert(artifacts.length === 5, 'manifest: collects known artifacts');
+    assert(artifacts.some((p: string) => p.endsWith('firmware.ihx')),
+        'manifest: collects SDCC Intel HEX artifacts');
+    assert(artifacts.some((p: string) => p.endsWith('firmware.map')),
+        'manifest: collects map artifacts');
+    assert(artifacts.every((p: string) => !p.endsWith('firmware.rel')),
+        'manifest: ignores SDCC intermediate rel artifacts');
     assert(artifacts.every((p: string) => !p.endsWith('notes.txt')),
         'manifest: ignores unrelated files');
 
@@ -63,7 +70,7 @@ try {
     const written = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     assert(written.buildId === id1, 'manifest: writes build id');
     assert(written.configHash === id1, 'manifest: writes config hash');
-    assert(written.artifacts.length === 4, 'manifest: writes artifacts');
+    assert(written.artifacts.length === 5, 'manifest: writes artifacts');
 } finally {
     fs.rmSync(baseDir, { recursive: true, force: true });
 }

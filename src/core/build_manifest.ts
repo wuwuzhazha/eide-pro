@@ -52,7 +52,7 @@ export function writeBuildManifest(outDir: string, manifest: BuildManifest): str
 
 const artifactExtensions = [
     '.elf', '.hex', '.bin', '.map', '.axf', '.out',
-    '.s19', '.s37', '.sm8', '.lst'
+    '.s19', '.s37', '.sm8', '.lst', '.ihx'
 ];
 
 export function collectArtifacts(outDir: string): string[] {

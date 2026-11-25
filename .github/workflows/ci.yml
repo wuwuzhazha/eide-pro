@@ -169,12 +169,12 @@ jobs:
           - template: mcs51_sdcc
             apt_package: sdcc
             expected_binary: sdcc
-            binary_source: /usr/bin/sdcc
             artifact_extension: .hex
           - template: gd32vf103_riscv
             apt_package: gcc-riscv64-unknown-elf
             expected_binary: riscv-none-embed-gcc
-            binary_source: /usr/bin/riscv64-unknown-elf-gcc
+            binary_sources: /usr/bin/riscv64-unknown-elf-gcc,/usr/bin/riscv64-unknown-elf-g++,/usr/bin/riscv64-unknown-elf-objcopy,/usr/bin/riscv64-unknown-elf-ar
+            binary_aliases: riscv-none-embed-gcc,riscv-none-embed-g++,riscv-none-embed-objcopy,riscv-none-embed-ar
             artifact_extension: .elf
     steps:
       - name: Checkout
@@ -207,10 +207,17 @@ jobs:
           npm ci
           sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update
           sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 install -y --no-install-recommends "${{ matrix.apt_package }}"
-          test -x "${{ matrix.binary_source }}"
-          mkdir -p "$RUNNER_TEMP/toolchain/bin"
-          ln -sf "${{ matrix.binary_source }}" "$RUNNER_TEMP/toolchain/bin/${{ matrix.expected_binary }}"
-          test -x "$RUNNER_TEMP/toolchain/bin/${{ matrix.expected_binary }}"
+          if [ -n "${{ matrix.binary_sources }}" ]; then
+            IFS=',' read -r -a sources <<< "${{ matrix.binary_sources }}"
+            IFS=',' read -r -a aliases <<< "${{ matrix.binary_aliases }}"
+            for index in "${!sources[@]}"; do
+              test -x "${sources[$index]}"
+              sudo ln -sf "${sources[$index]}" "/usr/bin/${aliases[$index]}"
+              test -x "/usr/bin/${aliases[$index]}"
+            done
+          else
+            test -x "/usr/bin/${{ matrix.expected_binary }}"
+          fi
 
       - name: Build extension and headless bundles
         timeout-minutes: 15
