@@ -39,6 +39,32 @@ incident record is dropped when memory fades.
    - Skipping was allowed locally but not forbidden in CI → the gate could
      pass with the test skipped (now pinned with `EIDE_REQUIRE_QEMU_DEBUG`).
 
+5. Tests must not depend on the host environment (toolchains, PATH, machine
+   setup).
+   Incidents:
+   - A new VS Code-mode regression test (`test/scripts/mcp-impl-regression.test.ts`)
+     passed without passing `toolchainPath` because the author's machine had
+     the toolchain on PATH; all three CI platforms failed with
+     `Toolchain 'GCC' is not installed or its path is not configured: null\bin`.
+     Fixed by a stub toolchain (commit `ec5ea86`); completion criterion is now
+     "still passes with the host toolchain removed from PATH".
+   - Compound symptom: a stale local `out/src` masked a `MODULE_NOT_FOUND`,
+     and locally missing QEMU made the test skip before reaching the code,
+     masking a fixture path that was missing one directory level.
+
+6. Parallel compilation in a shared workspace produces transient false
+   failures; isolate and rerun once before judging a single failure.
+   Incidents:
+   - A full test run reported `FAIL: routing: disconnected earliest is
+     unavailable without falling through` (assertion in
+     `test/scripts/instance-routing.test.ts:37`); the file passed 9/9 on
+     isolated rerun. Cause: a concurrent `tsc -p ./` was rewriting
+     `out/src/mcp/instance_routing.js`.
+   - An earlier full run exited with `MODULE_NOT_FOUND:
+     out/tmp/test/scripts/utility.test.js`, likewise from concurrent
+     compilation rewriting `out/`. CI jobs are environment-isolated and
+     unaffected.
+
 ## Checks
 
 Dispatch: `npm run check:task-card -- <card.md>` — validates the card's
@@ -65,6 +91,12 @@ its first use (PROC-1).
 Delivery: `npm run check:branch` — fetches the remote and reports the branch
 name, how far behind `origin/dev` you are, uncommitted files, and whether you
 are ahead. Exit code 1 means rebase or commit first.
+
+A new test that needs a toolchain must pass one explicitly as a stub and be
+verified with the host toolchain removed from PATH; see
+`test/scripts/mcp-impl-regression.test.ts`. When a full test run fails once,
+rerun that file in isolation first: if it passes, treat it as concurrent
+compilation noise, not a product defect.
 
 ## Pre-commit checklist
 
