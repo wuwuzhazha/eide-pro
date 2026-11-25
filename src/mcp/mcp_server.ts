@@ -34,6 +34,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types';
 import { acquireProjectLock, releaseProjectLock } from '../core/project_lock';
 import { File } from '../../lib/node-utility/File';
 import { createMcpServer } from './mcp_proxy_tools';
+import { routeInstance, RoutingReason } from './instance_routing';
 import {
     appendMcpLog,
     attachFrameReader,
@@ -86,18 +87,8 @@ class InstanceRouter {
         }
     }
 
-    pickEarliestInstanceId(): string | undefined {
-        let earliest: ExtensionInstance | undefined;
-        for (const inst of this.instances.values()) {
-            if (!earliest || inst.registeredAt < earliest.registeredAt) {
-                earliest = inst;
-            }
-        }
-        return earliest?.instanceId;
-    }
-
     pickInstanceForNewSession(): string | undefined {
-        return this.pickEarliestInstanceId();
+        return this.route({}).instanceId;
     }
 
     bindSession(sessionId: string, instanceId: string): void {
@@ -108,25 +99,24 @@ class InstanceRouter {
         this.sessionToInstance.delete(sessionId);
     }
 
-    findInstanceByUid(uid: string): string | undefined {
-        for (const inst of this.instances.values()) {
-            if (inst.projects.some(p => p.uid === uid)) {
-                return inst.instanceId;
-            }
-        }
-        return undefined;
+    route(request: { hintUid?: string | null; boundInstanceId?: string | null }): {
+        instanceId: string | undefined;
+        reason: RoutingReason;
+    } {
+        const snapshots = Array.from(this.instances.values()).map(instance => ({
+            instanceId: instance.instanceId,
+            registeredAt: instance.registeredAt,
+            connected: !instance.socket.destroyed,
+            projectUids: instance.projects.map(project => project.uid)
+        }));
+        return routeInstance(snapshots, request);
     }
 
-    resolveInstance(defaultInstanceId: string, hintUid?: string | null): string | undefined {
-        if (hintUid) {
-            const owner = this.findInstanceByUid(hintUid);
-            if (owner) {
-                return owner;
-            }
-        } else {
-            return this.pickEarliestInstanceId();
-        }
-        return this.instances.has(defaultInstanceId) ? defaultInstanceId : undefined;
+    resolveInstance(defaultInstanceId: string, hintUid?: string | null): {
+        instanceId: string | undefined;
+        reason: RoutingReason;
+    } {
+        return this.route({ hintUid, boundInstanceId: defaultInstanceId });
     }
 
     handleToolResult(requestId: string, result: CallToolResult): void {
@@ -145,18 +135,18 @@ class InstanceRouter {
         defaultInstanceId: string
     ): Promise<CallToolResult> {
         const hintUid = args.uid as string | null | undefined;
-        const instanceId = this.resolveInstance(defaultInstanceId, hintUid);
+        const { instanceId, reason } = this.resolveInstance(defaultInstanceId, hintUid);
         if (!instanceId) {
             return Promise.resolve({
                 isError: true,
-                content: [{ type: 'text', text: 'No EIDE extension instance available for this request.' }]
+                content: [{ type: 'text', text: `No EIDE extension instance available for this request (${reason}).` }]
             });
         }
         const inst = this.instances.get(instanceId);
         if (!inst || inst.socket.destroyed) {
             return Promise.resolve({
                 isError: true,
-                content: [{ type: 'text', text: `EIDE extension instance disconnected (id=${instanceId}).` }]
+                content: [{ type: 'text', text: `EIDE extension instance disconnected (id=${instanceId}, reason=${reason}).` }]
             });
         }
 
@@ -327,13 +317,14 @@ async function main(): Promise<void> {
             if (sessionId && transports[sessionId]) {
                 transport = transports[sessionId];
             } else if (!sessionId && isInitializeRequest(req.body)) {
-                const boundInstanceId = instanceRouter.pickInstanceForNewSession();
+                const sessionRoute = instanceRouter.route({});
+                const boundInstanceId = sessionRoute.instanceId;
                 if (!boundInstanceId) {
                     res.status(503).json({
                         jsonrpc: '2.0',
                         error: {
                             code: -32000,
-                            message: 'No EIDE extension instance connected. Open a VS Code window with EIDE enabled.'
+                            message: `No EIDE extension instance connected (${sessionRoute.reason}). Open a VS Code window with EIDE enabled.`
                         },
                         id: null
                     });
