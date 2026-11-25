@@ -3377,10 +3377,10 @@ $(OUT_DIR):
             } catch (error) {
                 GlobalEvent.log_warn(<Error>error);
                 if (this.headless) {
-                    throw new Error(
+                    GlobalEvent.log_warn(
                         `${toolchain.getToolchainPrefix()}gcc is not available from xpack: ` +
-                        `${(<Error>error).message}\n` +
-                        `Run 'xpm install' in the project directory.`);
+                        `${(<Error>error).message}; run 'xpm install' in the project directory.`);
+                    return false;
                 }
                 const msg = [
                     `${toolchain.getToolchainPrefix()}gcc not avaliable:\n${(<Error>error).message}`,
@@ -3402,9 +3402,10 @@ $(OUT_DIR):
         if (!toolchainManager.isToolchainPathReady(toolchain.name)) {
             const dir = toolchainManager.getToolchainExecutableFolder(toolchain.name);
             if (this.headless) {
-                throw new Error(
+                GlobalEvent.log_warn(
                     `Toolchain '${toolchain.name}' is not installed or its path is not configured` +
                     (dir ? `: ${dir.path}` : '.'));
+                return false;
             }
             let tooldisplayname: string = toolchain.name;
             if (isGccFamilyToolchain(toolchain.name) && toolchain.getToolchainPrefix)

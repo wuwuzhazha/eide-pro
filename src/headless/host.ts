@@ -13,11 +13,7 @@ import { EXTENSION_ID } from '../ExtensionInfo';
 import { installVscodeShim } from './vscode';
 import { ConfigError } from '../core/errors';
 import { TOOLCHAIN_SETTING_KEYS } from '../core/toolchain_setting_keys';
-import {
-    dumpProjectConfig,
-    migrateProjectConfig,
-    needsProjectConfigMigration
-} from '../core/project_config_migration';
+import { migrateLoadedConfig } from '../core/project_config_migration';
 
 const FILE_SETTING_KEYS = new Set(['C51.INI.Path']);
 
@@ -109,22 +105,6 @@ function readProjectConfig(workspaceFile: string): any {
         throw new Error(`Invalid project config: ${configFile}`);
     }
     return migrateLoadedConfig(config, configFile);
-}
-
-/**
- * Migrate and persist an old config before the loader reads it again; configs
- * that need no migration are returned untouched.
- */
-function migrateLoadedConfig(config: any, configFile: string): any {
-    if (!needsProjectConfigMigration(config)) {
-        return config;
-    }
-    const sourceVersion = String(config.version);
-    migrateProjectConfig(config);
-    fs.writeFileSync(configFile, dumpProjectConfig(config), 'utf8');
-    process.stderr.write(
-        `migration ${configFile} from ${sourceVersion} to ${config.version}\n`);
-    return config;
 }
 
 function selectTarget(config: any, requested: string | undefined): string {
@@ -285,7 +265,14 @@ export async function openHeadlessProject(
     try {
         await project.LoadForHeadless(new File(workspaceFile));
         if (!project.checkAndNotifyInstallToolchain()) {
-            throw new Error('Toolchain is not installed or is not configured.');
+            const toolchain = project.getToolchain();
+            const { ToolchainManager } = require('../ToolchainManager') as
+                typeof import('../ToolchainManager');
+            const dir = ToolchainManager.getInstance()
+                .getToolchainExecutableFolder(toolchain.name);
+            throw new Error(
+                `Toolchain '${toolchain.name}' is not installed or its path is not configured` +
+                (dir ? `: ${dir.path}` : '.'));
         }
     } catch (error) {
         project.Close();
