@@ -52,7 +52,6 @@ export class CmdLineHandler {
     }
 
     static quoteString(str: string, quote: string): string {
-        return (str.includes(' ') && !str.includes(quote)) ? (quote + str + quote) : str;
         if (str !== '' && !/[\s&()^%<>|;,"']/.test(str)) {
             return str;
         }
