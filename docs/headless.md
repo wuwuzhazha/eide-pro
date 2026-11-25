@@ -139,7 +139,7 @@ Options:
 | `--threads <n>` | Build worker threads (default: EIDE setting) |
 | `--flasher-exe <path>` | Flash tool executable; required for JLink/OpenOCD/STLink |
 | `--erase-all` | Chip erase instead of programming |
-| `--verify`, `--no-verify` | Force or skip verification where the tool allows it |
+| `--verify`, `--no-verify` | Verification is the default where the tool supports it; `--no-verify` skips it and is rejected for JLink, which always verifies |
 | `--artifact <path[,addr]>` | Override the programmed artifact |
 
 All commands print one JSON object to stdout, including failures. Logs go to

@@ -125,7 +125,7 @@ export function createCommandKernel(options: CommandKernelOptions): CommandKerne
                     flasherExecutable: request.flasherExecutable,
                     timeoutMs: request.timeoutMs ?? 120_000,
                     eraseAll: request.eraseAll ?? false,
-                    verify: request.verify ?? false,
+                    verify: request.verify,
                     artifact: request.artifact
                 });
                 if (request.dryRun) {
