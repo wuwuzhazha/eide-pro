@@ -155,6 +155,6 @@ jobs:
           EIDE_REQUIRE_QEMU_DEBUG: '1'
         run: |
           set -euo pipefail
-          npx tsc -p test
+          npx tsc -p ./ && npx tsc -p test
           node out/tmp/test/scripts/debug-qemu-session.test.js | tee "$RUNNER_TEMP/qemu-debug.log"
           grep -q 'QEMU DEBUG SESSION RAN' "$RUNNER_TEMP/qemu-debug.log"
