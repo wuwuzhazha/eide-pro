@@ -16,21 +16,35 @@ groups, env.ini expansion, and virtual source folders.
 
 ## 1. Identify the server mode
 
-| Mode | How it is configured | Requires VS Code | Tools |
-|------|----------------------|------------------|-------|
-| VS Code HTTP MCP | `http://localhost:8940/mcp` plus `EIDE.MCP.Server.Enable` | Yes, with the project open | Project/build tools |
-| Headless stdio MCP | `eide-mcp --project ...` from the headless package | No | Project/build tools plus debug tools |
+Both transports expose the **same tool set**. They differ in transport and in
+which backend executes the call, not in what the tools are called.
 
-If `eide_debug_*` tools are present, it is the headless server. The headless
-server discovers its projects from launch arguments, so there is no "add
-project" tool.
+| Mode | How it is configured | Requires VS Code | Executes in |
+|------|----------------------|------------------|-------------|
+| VS Code HTTP MCP | `http://localhost:8940/mcp` plus `EIDE.MCP.Server.Enable` | Yes, with the project open | The running extension |
+| Headless stdio MCP | `eide-mcp --project ...` from the headless package | No | Its own process |
+
+The one behavioural difference: **debug tools only work over stdio**. Over HTTP
+they are still listed, but calling one returns
+
+```json
+{"success":false,"error":{"kind":"config","name":"UnsupportedTransport",
+  "message":"Debug tools require the headless MCP (stdio). Start: eide-mcp --project <dir>"}}
+```
+
+That is not a missing feature. A GDB session needs a long-lived process, which
+the HTTP request path does not provide. When you need debugging, start the
+headless server instead of concluding the tool does not exist.
+
+The headless server discovers its projects from launch arguments, so there is
+no "add project" tool.
 
 Headless launch:
 
 ```json
 {
   "mcpServers": {
-    "eide-headless": {
+    "eide-pro": {
       "command": "eide-mcp",
       "args": [
         "--project", "/path/to/firmware",
@@ -40,6 +54,9 @@ Headless launch:
   }
 }
 ```
+
+Add `--gdb /path/to/gdb` when the GDB executable is not `arm-none-eabi-gdb` on
+`PATH`.
 
 Install the standalone package from a GitHub Release:
 
@@ -63,30 +80,36 @@ Every tool result provides the JSON payload twice: as `structuredContent`
 
 ## 2. Rules that prevent most failures
 
-1. **Always obtain the real project UID.** Read `miscInfo.uid` from
+1. **Check the environment before claiming a tool is missing.** Call
+   `eide_get_environment` and read the `source` of each entry: `settings`,
+   `toolchain-path`, `project-config`, `path`, `xpack`, or `not-found`. Only
+   when an entry is `not-found` **and** `searched` is non-empty may you tell the
+   user that the tool is absent — and say which locations were searched.
+   Never report "no toolchain" without calling this tool first.
+2. **Always obtain the real project UID.** Read `miscInfo.uid` from
    `<project>/.eide/eide.yml`. `uid` is optional in single-project headless
    mode; required in multi-project headless and VS Code HTTP mode. Do not
    invent one: a UID that does not match a loaded project resolves to
    "Not such project".
-2. **Call tools sequentially.** The headless server queues calls internally,
+3. **Call tools sequentially.** The headless server queues calls internally,
    but sequential `get → set → verify` is easier to reason about and avoids
    overlapping long builds.
-3. **Prefer tools over YAML.** Use the matching `eide_get_*` first, then the
+4. **Prefer tools over YAML.** Use the matching `eide_get_*` first, then the
    setter. For example: `eide_get_defines` → edit array → `eide_set_defines`.
-4. **Headless reads `eide.yml` on each call.** Manual edits are visible to the
+5. **Headless reads `eide.yml` on each call.** Manual edits are visible to the
    next tool call, and `eide_reload` is a no-op there. In VS Code mode, call
    `eide_reload` after manual edits.
-5. **Do not flatten EIDE features into defines/includes.** `.eide/env.ini`,
+6. **Do not flatten EIDE features into defines/includes.** `.eide/env.ini`,
    virtual source folders, `dependenceList`, and `.eide/files.options.yml` are
    already consumed by the build pipeline in both modes.
-6. **Use overrides for one-off builds, not permanence.** Any non-empty
+7. **Use overrides for one-off builds, not permanence.** Any non-empty
    `overrides` object forces a rebuild. Persist settings with the config tools
    when the change should survive.
-7. **`eide_set_builder_opts` replaces the whole options object.** Read it,
+8. **`eide_set_builder_opts` replaces the whole options object.** Read it,
    modify the returned structure, and send the complete object back.
-8. **Include and source paths must stay inside the project.** The setters
+9. **Include and source paths must stay inside the project.** The setters
    normalize paths and reject paths outside the project root.
-9. **`eide_switch_target` is session-local in headless mode.** It changes the
+10. **`eide_switch_target` is session-local in headless mode.** It changes the
    target used by later headless calls but does not rewrite `eide.yml`; pass
    the target explicitly when starting the server if the target must be fixed.
 
@@ -180,6 +203,7 @@ All of these require `uid`.
 | Tool | Extra arguments | Effect |
 |------|-----------------|--------|
 | `eide_get_targets` | — | `{ actived, targets }` |
+| `eide_get_environment` | `target?` | Resolved tool paths with their `source` and the `searched` evidence chain |
 | `eide_switch_target` | `targetName` | Select active target |
 | `eide_get_src_dirs` | — | Source root list |
 | `eide_add_src_dir` | `path` | Add a source root |
@@ -217,10 +241,13 @@ Both read `statistic.json` from the last successful build. If it is missing,
 enable the corresponding compiler options with `eide_set_builder_opts` and
 rebuild.
 
-## 6. Debugging (headless MCP only)
+## 6. Debugging (headless stdio only)
 
-The debug tools are backed by a persistent GDB/MI session. Build the project
-before connecting; the default ELF is
+These tools are backed by a persistent GDB/MI session. Over HTTP they are
+listed but return `UnsupportedTransport`; start the headless server with
+`eide-mcp --project <dir> [--gdb <path>]` to use them.
+
+Build the project before connecting; the default ELF is
 `<project>/<outDir>/<target>/<projectName>.elf`.
 
 | Tool | Arguments |
