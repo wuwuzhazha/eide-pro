@@ -7,7 +7,7 @@ const yaml = require('yaml');
 const { createHeadlessToolExecutor } = require('../../../src/mcp/headless_tools') as any;
 
 const QEMU_MACHINE = 'netduinoplus2';
-const QEMU_ARGS = ['-nographic', '-monitor', 'none', '-serial', 'none'];
+const QEMU_ARGS = ['-S', '-nographic', '-monitor', 'none', '-serial', 'none'];
 
 function skipped(reason: string): never {
     if (process.env.EIDE_REQUIRE_QEMU_DEBUG === '1') {
@@ -143,12 +143,15 @@ async function run(): Promise<void> {
 
         const port = await freePort();
         const target = `127.0.0.1:${port}`;
-        qemuProcess = spawn(qemu, [
+        const qemuArgs = [
             '-M', QEMU_MACHINE,
             '-kernel', elf,
             '-gdb', `tcp:${target}`,
             ...QEMU_ARGS
-        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+        ];
+        assert(qemuArgs.includes('-S'), 'qemu: target is halted until the debugger resumes it');
+        console.log(`QEMU_ARGS=${JSON.stringify(qemuArgs)}`);
+        qemuProcess = spawn(qemu, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
         qemuProcess.stderr.resume();
         await waitForPort(port, 5000);
 
@@ -170,6 +173,11 @@ async function run(): Promise<void> {
 
         let result = await call('eide_debug_connect', { target, mode: 'extended-remote' });
         assert(result.isError !== true && parse(result).success === true, 'qemu: debug connect');
+
+        const haltedPc = await call('eide_debug_read_register', { name: 'pc' });
+        assert(haltedPc.isError !== true
+            && typeof parse(haltedPc).value === 'number',
+        'qemu: target is halted until the debugger resumes it');
 
         result = await call('eide_debug_set_breakpoint', { location: 'main', hardware: true });
         assert(result.isError !== true && parse(result).functionName === 'main',
