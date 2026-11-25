@@ -217,9 +217,17 @@ async function ensureProxyRunning(
     httpPort: number,
     serverJs: string,
     extensionVersion: string,
-    bundleId: string
+    bundleId: string,
+    force = false
 ): Promise<McpHealthResponse> {
     let health = await checkProxyHealth(httpPort);
+
+    if (force && health) {
+        logInfo(`Restarting MCP proxy on port ${httpPort} (forced).`);
+        await stopProxy(health.pid);
+        await waitForProxyGone(httpPort, ipcConnectTimeoutMs);
+        health = undefined;
+    }
 
     if (health && !isMcpHealthCompatible(health, extensionVersion, bundleId)) {
         logInfo(
@@ -257,6 +265,35 @@ async function ensureProxyRunning(
     }
 
     return health;
+}
+
+export function makeIpcUnreachableError(
+    httpPort: number,
+    ipcPort: number,
+    lastError?: Error
+): Error {
+    return new Error(
+        `MCP proxy answered on HTTP port ${httpPort} but its IPC port ${ipcPort} is unreachable, ` +
+        `and the IPC connection still failed after restarting the proxy once` +
+        (lastError ? ` (last error: ${lastError.message})` : '') +
+        `. Check 'EIDE.MCP.Server.Port' and see log: ${getLogPath(httpPort)}`
+    );
+}
+
+export async function connectWithOneRestart(deps: {
+    connect: () => Promise<void>;
+    restart: () => Promise<void>;
+}): Promise<'connected' | 'restarted' | 'failed'> {
+    const connected = await deps.connect().then(() => true, () => false);
+    if (connected) {
+        return 'connected';
+    }
+    const restarted = await deps.restart().then(() => true, () => false);
+    if (!restarted) {
+        return 'failed';
+    }
+    const reconnected = await deps.connect().then(() => true, () => false);
+    return reconnected ? 'restarted' : 'failed';
 }
 
 async function connectIpc(ipcPort: number): Promise<net.Socket> {
@@ -353,9 +390,37 @@ export async function mcpClientConnect(
     }
 
     const bundleId = getMcpBundleId(serverJs);
-    const health = await ensureProxyRunning(httpPort, serverJs, extensionVersion, bundleId);
+    let health = await ensureProxyRunning(httpPort, serverJs, extensionVersion, bundleId);
+    let pendingSocket: net.Socket | undefined;
+    let lastError: Error | undefined;
 
-    socket = await connectIpc(health.ipcPort);
+    const outcome = await connectWithOneRestart({
+        connect: async () => {
+            try {
+                pendingSocket = await connectIpc(health.ipcPort);
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                throw error;
+            }
+        },
+        restart: async () => {
+            logInfo(
+                `MCP proxy IPC port ${health.ipcPort} is unreachable, restarting proxy on port ${httpPort} ...`);
+            try {
+                health = await ensureProxyRunning(
+                    httpPort, serverJs, extensionVersion, bundleId, true);
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                throw error;
+            }
+        }
+    });
+
+    if (outcome === 'failed' || pendingSocket === undefined) {
+        throw makeIpcUnreachableError(httpPort, health.ipcPort, lastError);
+    }
+
+    socket = pendingSocket;
     setupMessageHandler(socket, projectExplorer);
     sendRegister(socket, projectExplorer);
     startPing(socket);
