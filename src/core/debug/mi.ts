@@ -451,6 +451,13 @@ export interface MiVariableOptions {
     frameLevel?: number;
 }
 
+function variableListCommand(options: MiVariableOptions): string {
+    if (options.threadId !== undefined && options.frameLevel !== undefined) {
+        return `-stack-list-variables --thread ${options.threadId} --frame ${options.frameLevel} 1`;
+    }
+    return '-stack-list-variables 1';
+}
+
 export interface MiBreakpointLocation {
     number: string;
     enabled: boolean;
@@ -796,15 +803,7 @@ export class MiSession {
             && (!Number.isSafeInteger(options.frameLevel) || options.frameLevel < 0)) {
             throw new MiError('state', 'variable frame level must be a non-negative integer');
         }
-        let command = '-stack-list-variables';
-        if (options.threadId !== undefined) {
-            command += ` --thread ${options.threadId}`;
-        }
-        if (options.frameLevel !== undefined) {
-            command += ` --frame ${options.frameLevel}`;
-        }
-        command += ' 1';
-        const record = await this.runCommand(command, ['done']);
+        const record = await this.runCommand(variableListCommand(options), ['done']);
         const variablesRaw = record.results.variables;
         if (!Array.isArray(variablesRaw)) {
             throw new MiError('protocol', 'variable list response has no variables list');

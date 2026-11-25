@@ -390,6 +390,13 @@ async function testThreadsFramesAndVariables(): Promise<void> {
         'scoped variable list command',
     );
     assertEqual(scoped.length, 3, 'scoped variable count');
+
+    await harness.session.listVariables({ frameLevel: 0 });
+    assertEqual(
+        harness.fake.written[8],
+        '9-stack-list-variables 1\n',
+        'frame-only variable list falls back to selected frame',
+    );
     await harness.session.disconnect();
 
     const malformedThreads = createHarness((command, token) => {
