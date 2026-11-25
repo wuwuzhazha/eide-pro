@@ -75,6 +75,7 @@
         "check:task-card": "node scripts/verify-task-card.js",
         "check:branch": "node scripts/check-branch-state.js",
         "vscode:prepublish": "webpack --mode production && webpack --config webpack.headless.config.js",
+        "verify:vsix": "node scripts/check-vsix-contents.js",
         "webpack": "webpack --mode development",
         "webpack:headless": "webpack --config webpack.headless.config.js",
         "compile": "tsc -p ./",

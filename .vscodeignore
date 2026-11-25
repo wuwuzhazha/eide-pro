@@ -1,5 +1,6 @@
 .git
 .github
+.tasks
 .vscode
 .vscode-test
 artifacts
@@ -45,6 +46,7 @@ node_modules/**
 
 # ignore unused files
 AGENTS.md
+lib/node-utility
 bin
 bin/builder/*.xml
 bin/builder/*.exe.config

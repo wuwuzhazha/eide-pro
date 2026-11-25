@@ -72,6 +72,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify VSIX contents before packaging
+        run: npm run verify:vsix
+
       - name: Package headless distribution
         run: npm run package:headless
 
