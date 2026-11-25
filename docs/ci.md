@@ -108,7 +108,7 @@ is the toolchain root in this example.
 | 8051 SDCC | `mcs51_sdcc` template | `apt install sdcc`, `create` + `build`, `.ihx` in `artifacts` (commit `9955741`) | verified build |
 | RISC-V GCC (`gd32vf103_riscv`) | template | Debian/Ubuntu `gcc-riscv64-unknown-elf` | not supported with apt toolchain |
 | STM8 SDCC | `stm8s_sdcc` template | `apt install sdcc`, needs `sdcc` + `sdasstm8`, build succeeded, `.hex`/`.ihx` accepted | verified build |
-| AVR | `avr_atmega128_rtos` template | current avr-libc | template incompatible with current avr-libc |
+| AVR | `avr_atmega128_rtos` template | apt `gcc-avr,avr-libc`, `create` + `build`, `firmware.elf`/`.hex`/`.map` produced (template fix in commit `28c0156`) | verified build |
 | MIPS, IAR, AC5/AC6 | templates | none | unverified |
 
 The `toolchain-builds` job and the `headless-package` E2E in
@@ -121,13 +121,6 @@ spec file 'nosys.specs'`. The Debian package ships no `specs` files, no
 `picolibc-riscv64-unknown-elf`). The template requires the xPack
 `riscv-none-embed` toolchain, which bundles newlib.
 
-The `avr_atmega128_rtos` template does not compile against modern avr-libc:
-`attempt to use poisoned "SIG_OUTPUT_COMPARE0"` (poisoned at
-`/usr/lib/avr/include/avr/iom128.h:1262`). Its bundled RTOS9 port uses
-old-style interrupt names; covering it requires fixing the template contents
-first (e.g. `ISR(TIMER0_COMP_vect)`), which is outside CI scope.
-
-MIPS and the commercial toolchains (IAR, AC5/AC6) have no real build
-verification: commercial licenses cannot be obtained in CI, and the MIPS
-template has not been run in this configuration. Plan-only checks exist for
-their schemas; treat build results as unverified.
+MIPS has not been run in this configuration. The commercial toolchains
+(IAR, AC5/AC6) cannot be obtained in CI because licenses are required.
+Plan-only checks exist for their schemas; treat build results as unverified.
