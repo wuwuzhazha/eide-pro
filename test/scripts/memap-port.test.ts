@@ -2,12 +2,13 @@
  * Golden comparison for the built-in memap port (src/core/memap.ts).
  *
  * Fixtures under test/fixtures/memap/<format>/ were produced from real builds
- * and the expected numbers in golden.json come from the patched memap
- * (res/data/patches/memap.py, patchVer 2) via:
+ * and the expected numbers in golden.json come from the patched memap that
+ * EIDE bundled before this port (removed from the tree; see git history for
+ * res/data/patches/memap.py). They were captured with:
  *
- *   PYTHONPATH=<pkg> python36 -m memap -t GCC_ARM   -d 100 golden.map
- *   PYTHONPATH=<pkg> python36 -m memap -t ARM_MICRO -d 100 golden.map
- *   PYTHONPATH=<pkg> python36 -m memap -t IAR       -d 100 golden.map
+ *   memap -t GCC_ARM   -d 100 golden.map
+ *   memap -t ARM_MICRO -d 100 golden.map
+ *   memap -t IAR       -d 100 golden.map
  *
  * The IAR map is the real ilinkarm output from mbed-os
  * tools/test/memap/iar.map (it carries the linker command line); its

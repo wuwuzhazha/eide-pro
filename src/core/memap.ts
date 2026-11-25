@@ -23,17 +23,18 @@
 */
 
 /*
-    TypeScript port of the format parsers in the bundled memap (Apache-2.0, ARM).
-    Only the three map formats used by the map view are ported here:
+    TypeScript port of the three map-format parsers used by the map view
+    (originally from ARM's memap, Apache-2.0):
 
-    - 'gcc'   -> memap `_GccParser`   (GNU ld map, used by GCC / GNU_SDCC_MCS51)
-    - 'armcc' -> memap `_ArmccParser` (ARMCC/ARMClang map, used by AC5 / AC6)
-    - 'iar'   -> memap `_IarParser`   (IAR ilinkarm map, used by IAR_ARM)
+    - 'gcc'   -> GNU ld map, used by GCC / GNU_SDCC_MCS51
+    - 'armcc' -> ARMCC/ARMClang map, used by AC5 / AC6
+    - 'iar'   -> IAR ilinkarm map, used by IAR_ARM
 
-    Parsing behavior (paths, section names, merge rules, `.map.old` deltas) is
-    kept numerically identical to `res/data/patches/memap.py`, which is the
-    version EIDE installs (patchVer 2). The golden fixtures under
-    `test/fixtures/memap/` were produced with that exact file.
+    The golden fixtures under `test/fixtures/memap/` are the oracle: every
+    per-object per-section size and `.map.old` delta in them must keep
+    matching. They were captured from the patched memap that EIDE bundled
+    before this port; that python package is no longer shipped (see git
+    history for `res/data/patches/memap.py`).
 */
 
 import * as NodePath from 'path';
