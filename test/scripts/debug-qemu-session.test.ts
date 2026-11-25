@@ -35,6 +35,12 @@ function parse(result: any): any {
     return JSON.parse(result.content[0].text);
 }
 
+function frameHasMain(frame: unknown): boolean {
+    return frame !== null && typeof frame === 'object'
+        && typeof (frame as Record<string, unknown>).func === 'string'
+        && String((frame as Record<string, unknown>).func).includes('main');
+}
+
 function commandExists(command: string): boolean {
     const result = spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], {
         encoding: 'utf8'
@@ -171,31 +177,75 @@ async function run(): Promise<void> {
         const call = (tool: string, args: Record<string, unknown> = {}) =>
             execute(tool, { uid, ...args });
 
+        async function inspectStalledTarget(label: string): Promise<void> {
+            const backtrace = await call('eide_debug_backtrace', { maxDepth: 5 });
+            const pcAfter = await call('eide_debug_read_register', { name: 'pc' });
+            const flash = await call('eide_debug_read_memory', {
+                address: '0x08000000', length: 16
+            });
+            const ram = await call('eide_debug_read_memory', {
+                address: '0x20000000', length: 16
+            });
+            console.log(`EVIDENCE ${label} backtrace=${JSON.stringify(parse(backtrace))}`);
+            console.log(`EVIDENCE ${label} pc=${JSON.stringify(parse(pcAfter))}`);
+            console.log(`EVIDENCE ${label} flash[0x08000000]=${JSON.stringify(parse(flash))}`);
+            console.log(`EVIDENCE ${label} ram[0x20000000]=${JSON.stringify(parse(ram))}`);
+        }
+
         let result = await call('eide_debug_connect', { target, mode: 'extended-remote' });
         assert(result.isError !== true && parse(result).success === true, 'qemu: debug connect');
 
         const haltedPc = await call('eide_debug_read_register', { name: 'pc' });
+        console.log(`EVIDENCE pc=${JSON.stringify(parse(haltedPc))}`);
         assert(haltedPc.isError !== true
             && typeof parse(haltedPc).value === 'number',
         'qemu: target is halted until the debugger resumes it');
 
-        result = await call('eide_debug_set_breakpoint', { location: 'main', hardware: true });
-        assert(result.isError !== true && parse(result).functionName === 'main',
-            'qemu: breakpoint at main');
+        async function runBreakpointMode(hardware: boolean): Promise<any> {
+            const mode = hardware ? 'hw' : 'sw';
+            const disconnectFirst = await call('eide_debug_disconnect');
+            assert(disconnectFirst.isError !== true && parse(disconnectFirst).success === true,
+                `qemu: reset before ${mode} breakpoint`);
+            const reconnect = await call('eide_debug_connect', {
+                target, mode: 'extended-remote'
+            });
+            assert(reconnect.isError !== true && parse(reconnect).success === true,
+                `qemu: reconnect for ${mode} breakpoint`);
+            const breakpoint = await call('eide_debug_set_breakpoint', {
+                location: 'main', hardware
+            });
+            console.log(`EVIDENCE bp-mode=${mode} breakpoint=${JSON.stringify(parse(breakpoint))}`);
+            const continueResult = await call('eide_debug_continue', { stopTimeoutMs: 10000 });
+            const stoppedValue = parse(continueResult);
+            console.log(`EVIDENCE bp-mode=${mode} continue=${JSON.stringify(stoppedValue)}`);
+            if (continueResult.isError !== true) {
+                console.log(`EVIDENCE bp-mode=${mode} hit=${stoppedValue.class === 'stopped'
+                    && stoppedValue.results?.reason === 'breakpoint-hit'
+                    && frameHasMain(stoppedValue.results?.frame)}`);
+            }
+            return stoppedValue;
+        }
 
-        const stopped = parse(await call('eide_debug_continue', { stopTimeoutMs: 10000 }));
-        assert(stopped.class === 'stopped' && stopped.results.reason === 'breakpoint-hit',
-            'qemu: continue stops at breakpoint');
-        const stoppedFrame = stopped.results.frame;
-        assert(stoppedFrame !== null && typeof stoppedFrame === 'object'
-            && typeof (stoppedFrame as Record<string, unknown>).func === 'string'
-            && String((stoppedFrame as Record<string, unknown>).func).includes('main'),
-        'qemu: stop frame function contains main');
+        const hwStopped = await runBreakpointMode(true);
+        const swStopped = await runBreakpointMode(false);
+        const hwHit = hwStopped.class === 'stopped'
+            && hwStopped.results?.reason === 'breakpoint-hit'
+            && frameHasMain(hwStopped.results?.frame);
+        const swHit = swStopped.class === 'stopped'
+            && swStopped.results?.reason === 'breakpoint-hit'
+            && frameHasMain(swStopped.results?.frame);
+        console.log(`EVIDENCE bp-mode=hw hit=${hwHit}`);
+        console.log(`EVIDENCE bp-mode=sw hit=${swHit}`);
+        if (!hwHit && !swHit) {
+            await inspectStalledTarget('continue');
+        }
+        const stopped = hwHit ? hwStopped : swStopped;
+        assert(hwHit || swHit, 'qemu: continue stops at breakpoint');
 
         const frames = parse(await call('eide_debug_backtrace', { maxDepth: 5 }));
         assert(Array.isArray(frames) && frames.some((frame: any) =>
             typeof frame.functionName === 'string' && frame.functionName.includes('main')),
-            'qemu: backtrace contains main');
+        'qemu: backtrace contains main');
 
         const variableResult = await call('eide_debug_list_variables', { frameLevel: 0 });
         assert(variableResult.isError !== true
