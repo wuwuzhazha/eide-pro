@@ -15,9 +15,9 @@ settings are supported.
 | `eide-cli` / `eide-mcp` | Scripts and AI agents | Separate npm package from GitHub Release assets (`eide-pro-headless-<version>.tgz`), not the npm registry | Node.js 18+, .NET 6+ (the builder is framework-dependent) | No |
 
 Installing the extension does not put `eide-cli` on your PATH — that is
-expected, not a failed install. The extension offers to install these tools
-(decision and download logic in `src/mcp/tooling_install.ts`, which checks
-Node and .NET before prompting).
+expected, not a failed install. The extension offers to install these tools:
+it checks for Node.js and .NET first, then downloads the matching release
+package for the installed extension version.
 
 For troubleshooting you can run the bundles shipped inside the extension
 directory (`node <extension-dir>/dist/eide_cli.js …`; kept by
