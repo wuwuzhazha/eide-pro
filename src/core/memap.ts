@@ -353,12 +353,38 @@ export function formatSigned(value: number): string {
 }
 
 /**
+ * memap `reduce_depth`: group module rows under their first `depth` path
+ * components. memap applies `-d` to the table rows only; the subtotal and
+ * totals always sum the full module list, so the reduction runs here after
+ * the `.map.old` deltas are merged.
+ */
+function reduceModuleDepth(rows: { [module: string]: { [key: string]: number } },
+    depth: number): { [module: string]: { [key: string]: number } } {
+    const reduced: { [module: string]: { [key: string]: number } } = {};
+    for (const name of Object.keys(rows)) {
+        const parts = name.split(NodePath.sep);
+        if (parts[0] === '')
+            parts.shift();
+        const shortName = parts.slice(0, depth).join(NodePath.sep);
+        const entry = reduced[shortName] || (reduced[shortName] = {});
+        for (const key of Object.keys(rows[name]))
+            entry[key] = (entry[key] || 0) + rows[name][key];
+    }
+    return reduced;
+}
+
+/**
  * Build the memap `table` report: `Module | .text | .data | .bss | .rodata`
  * rows plus a `Subtotals` row. `.map.old` deltas follow memap's
  * `reduce_depth`/`compute_report` semantics.
+ *
+ * `depth` mirrors memap `-d`: when it is a positive number, module rows are
+ * grouped under their first `depth` path components; absent or non-positive
+ * keeps the full module paths.
  */
-export function buildMemapTable(modules: MemapModules, oldModules?: MemapModules): MemapTable {
-    const short: { [module: string]: { [key: string]: number } } = {};
+export function buildMemapTable(modules: MemapModules, oldModules?: MemapModules,
+    depth?: number): MemapTable {
+    let short: { [module: string]: { [key: string]: number } } = {};
 
     for (const name of Object.keys(modules)) {
         const entry: { [key: string]: number } = {};
@@ -379,6 +405,9 @@ export function buildMemapTable(modules: MemapModules, oldModules?: MemapModules
             }
         }
     }
+
+    if (depth !== undefined && depth > 0)
+        short = reduceModuleDepth(short, depth);
 
     const subtotal: { [key: string]: number } = {};
     for (const section of SECTIONS) {

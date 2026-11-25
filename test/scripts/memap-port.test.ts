@@ -143,4 +143,138 @@ for (const format of ['gcc', 'armcc'] as MemapFormat[]) {
     checkTable(format, fixture.golden, buildMemapTable(modules, oldModules));
 }
 
+/* ------------------------------------------------------------------ *
+ * Builtin ToolchainManager path used by the map view: depth threading
+ * and the report contract consumed by res/html/map_report.
+ * ------------------------------------------------------------------ */
+
+interface MapParserToolchain {
+    parseMapFile(mapFile: string, treeDepth?: number): string[] | Error;
+}
+
+interface MementoLike {
+    get<T>(key: string, defaultValue?: T): T | undefined;
+    update(key: string, value: unknown): Promise<void>;
+    keys(): readonly string[];
+    setKeysForSync?(keys: readonly string[]): void;
+}
+
+function memoryMemento(): MementoLike {
+    return {
+        get: () => undefined,
+        update: async () => undefined,
+        keys: () => [],
+        setKeysForSync: () => undefined
+    };
+}
+
+const repoRoot = NodePath.join(__dirname, '../../../..');
+
+/* ToolchainManager builds AC5/AC6/GCC from res/data/models, so the headless
+   runtime (shim + ResManager + SettingManager context) must be initialized
+   before it is loaded. */
+function initMapViewRuntime(): void {
+    const { initHeadlessRuntime } = require('../../../src/headless/host') as {
+        initHeadlessRuntime(options: {
+            resourcesDir: string;
+            extensionRoot: string;
+            workspaceRoot: string;
+            settings: unknown;
+            workspaceState: MementoLike;
+            globalState: MementoLike;
+        }): void;
+    };
+    const { loadHeadlessSettings } = require('../../../src/headless/settings') as {
+        loadHeadlessSettings(extensionRoot: string, workspaceFile: string | undefined,
+            settingsFile: string | undefined): unknown;
+    };
+    initHeadlessRuntime({
+        resourcesDir: NodePath.join(repoRoot, 'res'),
+        extensionRoot: repoRoot,
+        workspaceRoot: repoRoot,
+        settings: loadHeadlessSettings(repoRoot, undefined, undefined),
+        workspaceState: memoryMemento(),
+        globalState: memoryMemento()
+    });
+}
+
+function loadToolchain(name: string): MapParserToolchain | undefined {
+    const { ToolchainManager } = require('../../../src/ToolchainManager') as {
+        ToolchainManager: {
+            getInstance(): {
+                getToolchainByName(toolchainName: string): MapParserToolchain | undefined;
+            };
+        };
+    };
+    return ToolchainManager.getInstance().getToolchainByName(name);
+}
+
+function moduleNames(lines: string[]): string[] {
+    return lines
+        .filter((line) => line.startsWith('|'))
+        .map((line) => line.split('|')[1].trim())
+        .filter((name) => name !== '' && name !== 'Module' && name !== 'Subtotals');
+}
+
+initMapViewRuntime();
+
+for (const [toolchainName, format] of [
+    ['GCC', 'gcc'],
+    ['AC5', 'armcc'],
+] as [string, MemapFormat][]) {
+    const toolchain = loadToolchain(toolchainName);
+    assert(toolchain !== undefined && typeof toolchain.parseMapFile === 'function',
+        `${toolchainName}: builtin map parser is wired`);
+    if (toolchain === undefined)
+        continue;
+
+    const mapPath = NodePath.join(fixtureDir, format, 'golden.map');
+    const shallow = toolchain.parseMapFile(mapPath, 2);
+    const full = toolchain.parseMapFile(mapPath, 100);
+
+    assert(!(shallow instanceof Error), `${toolchainName}: depth=2 parse succeeds`);
+    assert(!(full instanceof Error), `${toolchainName}: depth=100 parse succeeds`);
+    if (shallow instanceof Error || full instanceof Error)
+        continue;
+
+    const shallowNames = moduleNames(shallow);
+    const fullNames = moduleNames(full);
+
+    const libLeaf = format === 'gcc'
+        ? NodePath.join('[lib]', 'golden.a', 'lib.o')
+        : NodePath.join('[lib]', 'c_p.l', '__main.o');
+    const libDir = NodePath.join('[lib]', format === 'gcc' ? 'golden.a' : 'c_p.l');
+
+    assert(fullNames.includes(libLeaf) && !fullNames.includes(libDir),
+        `${toolchainName}: depth=100 keeps the full library path '${libLeaf}'`);
+    assert(shallowNames.includes(libDir) && !shallowNames.includes(libLeaf),
+        `${toolchainName}: depth=2 groups the library row under '${libDir}'`);
+
+    // memap `-d` only truncates module rows; subtotals and totals keep
+    // summing the full module list.
+    const shallowRam = shallow.find((line) => line.startsWith('Total Static RAM memory'));
+    const fullRam = full.find((line) => line.startsWith('Total Static RAM memory'));
+    const shallowFlash = shallow.find((line) => line.startsWith('Total Flash memory'));
+    const fullFlash = full.find((line) => line.startsWith('Total Flash memory'));
+    assert(shallowRam === fullRam && shallowFlash === fullFlash,
+        `${toolchainName}: depth leaves the RAM/Flash totals unchanged`);
+
+    if (format === 'gcc') {
+        const headerLine = full.find((line) => /^\|\s+Module\s+/.test(line));
+        assert(headerLine !== undefined, 'GCC: builtin output has the | Module header row');
+        if (headerLine !== undefined) {
+            const columns = headerLine.split('|')
+                .map((cell) => cell.trim())
+                .filter((cell) => cell !== '')
+                .slice(1);
+            assert(stable(columns) === stable(['.text', '.data', '.bss', '.rodata']),
+                'GCC: header columns match res/html/map_report');
+        }
+        assert(fullRam === 'Total Static RAM memory (data + bss): 86(+0) bytes',
+            'GCC: RAM total line matches res/html/map_report');
+        assert(fullFlash === 'Total Flash memory (text + data + rodata): 264(+16) bytes',
+            'GCC: Flash total line matches res/html/map_report');
+    }
+}
+
 console.log('\nAll memap port golden tests passed.');

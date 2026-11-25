@@ -149,8 +149,10 @@ export interface IToolchian {
 
     /**
      * used to show .map.view
+     * @param treeDepth memap `-d` style module depth; toolchains that render
+     *        their own table ignore it
     */
-    parseMapFile?: (mapFile: string) => string[] | Error;
+    parseMapFile?: (mapFile: string, treeDepth?: number) => string[] | Error;
 
     // others
 
@@ -194,7 +196,7 @@ function readMemapToolchainRootDir(mapPath: string): string | undefined {
     return NodePath.dirname(NodePath.dirname(conf.compilerPath));
 }
 
-function parseMemapFile(mapPath: string, format: MemapFormat): string[] | Error {
+function parseMemapFile(mapPath: string, format: MemapFormat, treeDepth?: number): string[] | Error {
 
     if (!File.IsFile(mapPath))
         return new Error(`No such file: ${mapPath}`);
@@ -208,7 +210,7 @@ function parseMemapFile(mapPath: string, format: MemapFormat): string[] | Error 
             oldModules = parseMemapModules(fs.readFileSync(mapPath + '.old').toString(), format, toolchainRootDir);
         }
 
-        const table = buildMemapTable(modules, oldModules);
+        const table = buildMemapTable(modules, oldModules, treeDepth);
         const lines = utility.makeTextTable([table.header].concat(table.rows));
         if (lines === undefined)
             return new Error(`Nothing for this map: ${mapPath} !`);
@@ -1368,6 +1370,10 @@ class GNU_SDCC_MCS51 implements IToolchian {
             }
         };
     }
+
+    parseMapFile(mapPath: string, treeDepth?: number): string[] | Error {
+        return parseMemapFile(mapPath, 'gcc', treeDepth);
+    }
 }
 
 class COSMIC_STM8 implements IToolchian {
@@ -1863,8 +1869,8 @@ class AC5 implements IToolchian {
         ];
     }
 
-    parseMapFile(mapPath: string): string[] | Error {
-        return parseMemapFile(mapPath, 'armcc');
+    parseMapFile(mapPath: string, treeDepth?: number): string[] | Error {
+        return parseMemapFile(mapPath, 'armcc', treeDepth);
     }
 
     //
@@ -2164,8 +2170,8 @@ class AC6 implements IToolchian {
         return SettingManager.GetInstance().getArmcc6Dir();
     }
 
-    parseMapFile(mapPath: string): string[] | Error {
-        return parseMemapFile(mapPath, 'armcc');
+    parseMapFile(mapPath: string, treeDepth?: number): string[] | Error {
+        return parseMemapFile(mapPath, 'armcc', treeDepth);
     }
 
     getInternalDefines<T extends BuilderConfigData>(builderCfg: T, builderOpts: BuilderOptions): utility.CppMacroDefine[] {
@@ -2420,8 +2426,8 @@ class GCC implements IToolchian {
             options.global['arm-thumb-mode'] = 'thumb';
     }
 
-    parseMapFile(mapPath: string): string[] | Error {
-        return parseMemapFile(mapPath, 'gcc');
+    parseMapFile(mapPath: string, treeDepth?: number): string[] | Error {
+        return parseMemapFile(mapPath, 'gcc', treeDepth);
     }
 
     getInternalDefines<T extends BuilderConfigData>(builderCfg: T, builderOpts: BuilderOptions): utility.CppMacroDefine[] {

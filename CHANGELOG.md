@@ -14,6 +14,7 @@ All notable version changes will be recorded in this file.
   - The headless package now includes the MCP skill at `skills/eide-mcp-tools/SKILL.md`; `eide-mcp --print-skill` prints it from an installed package.
   - MCP servers now negotiate the latest protocol and expose the same tool set over HTTP and stdio; `eide_get_environment` reports resolved tool paths with their `source` and searched locations.
   - `eide_get_builder_opts_schema` accepts a dot-separated `path` and returns either compact top-level keys or the requested subtree.
+  - Map view for GCC, AC5, AC6 and SDCC-MCS51 now parses maps with the built-in parser, so it no longer needs the bundled python36 runtime.
 
 **Fixes**:
   - Headless builds now give each build a unique `buildId` and `configHash`, return no `artifacts` on failure, report `failureKind`, and kill the whole process tree on timeout.

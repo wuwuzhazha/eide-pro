@@ -2057,20 +2057,9 @@ class MapViewEditorProvider implements vscode.CustomTextEditorProvider {
         if (fileDepth <= 0)
             fileDepth = 100;
 
-        let parser: MapViewParserType = 'memap';
-
-        switch (toolchainId) {
-            case 'AC5':
-            case 'AC6':
-            case 'GCC':
-            case 'GNU_SDCC_MCS51':
-            case 'IAR_ARM':
-                parser = 'memap';
-                break;
-            default:
-                parser = 'builtin';
-                break;
-        }
+        // IAR maps need memap's yaml driven parser; every other supported
+        // toolchain renders its report with the builtin parser.
+        const parser: MapViewParserType = toolchainId === 'IAR_ARM' ? 'memap' : 'builtin';
 
         // check: do we have support a builtin parser ?
         if (parser == 'builtin') {
@@ -2209,7 +2198,7 @@ class MapViewEditorProvider implements vscode.CustomTextEditorProvider {
                         }
 
                         if (toolchain.parseMapFile) {
-                            let ret = toolchain.parseMapFile(vInfo.mapPath);
+                            let ret = toolchain.parseMapFile(vInfo.mapPath, vInfo.treeDepth);
                             if (ret instanceof Error)
                                 throw ret;
                             else
