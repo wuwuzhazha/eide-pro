@@ -25,7 +25,12 @@ function parseJson(text, label) {
     }
 }
 
-const [template, aptPackage, expectedBinary, artifactExtension] = process.argv.slice(2);
+const [template, aptPackage, expectedBinary, artifactExtensionsArg, requiredBinariesArg = ''] =
+    process.argv.slice(2);
+const artifactExtensions = artifactExtensionsArg.split(',').map(value => value.trim().toLowerCase());
+const requiredBinaries = requiredBinariesArg
+    ? requiredBinariesArg.split(',').map(value => value.trim())
+    : [expectedBinary];
 const repoRoot = path.resolve(__dirname, '..');
 const toolchainRoot = process.env.TOOLCHAIN_ROOT || '/usr';
 const work = process.env.RUNNER_TEMP
@@ -34,11 +39,13 @@ const work = process.env.RUNNER_TEMP
 const cli = path.join(repoRoot, 'dist', 'eide_cli.js');
 const resources = path.join(repoRoot, 'res');
 
-const binary = path.join(toolchainRoot, 'bin', expectedBinary);
-if (!fs.existsSync(binary)) {
-    fail(`expected EIDE binary is missing: ${binary} (apt package: ${aptPackage})`);
+for (const binaryName of requiredBinaries) {
+    const binary = path.join(toolchainRoot, 'bin', binaryName);
+    if (!fs.existsSync(binary)) {
+        fail(`expected EIDE binary is missing: ${binary} (apt package: ${aptPackage})`);
+    }
+    console.log(`OK: apt package ${aptPackage} provides ${binary}`);
 }
-console.log(`OK: apt package ${aptPackage} provides ${binary}`);
 
 const create = spawnSync(process.execPath, [
     cli, 'create', '--name', 'firmware', '--template', template,
@@ -61,6 +68,7 @@ assert(build.status === 0, `eide-cli build ${template}\n${build.stderr}\n${build
 const result = parseJson(build.stdout, 'build');
 assert(result.success === true, `build succeeded for ${template}`);
 assert(Array.isArray(result.artifacts)
-    && result.artifacts.some(file => file.toLowerCase().endsWith(artifactExtension)),
-`build produced ${artifactExtension} for ${template}: ${JSON.stringify(result.artifacts)}`);
+    && result.artifacts.some(file => artifactExtensions.some(extension =>
+        file.toLowerCase().endsWith(extension))),
+`build produced one of ${artifactExtensions.join(',')} for ${template}: ${JSON.stringify(result.artifacts)}`);
 console.log(`BREADTH_BUILD_OK template=${template} apt=${aptPackage} binary=${expectedBinary}`);
