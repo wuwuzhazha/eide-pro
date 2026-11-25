@@ -25,6 +25,22 @@ in the [licenses](./licenses) directory.
 The 7-Zip license text is reproduced in [licenses/7zip.txt](./licenses/7zip.txt).
 7-Zip is Copyright (c) 1999-2025 Igor Pavlov.
 
+## Project importer scripts
+
+The IAR/Segger project importers in `res/scripts` are bundled from the EIDE
+binary resource package and run on the bundled QuickJS runtime.
+
+| Component | License | Source |
+|-----------|---------|--------|
+| QuickJS (`qjs`, `qjs.exe`) | MIT | https://bellard.org/quickjs/ |
+| x2js (`res/scripts/lib/x2js`) | Apache-2.0 | https://code.google.com/p/x2js/ |
+| xmldom (`res/scripts/lib/x2js/xmldom`) | MIT | https://github.com/bigeasy/xmldom |
+| mingw-w64 runtime (`libwinpthread-1.dll`, Windows QuickJS build) | Zope Public License 2.1 | https://www.mingw-w64.org/ |
+
+The QuickJS license text is reproduced in
+[licenses/quickjs.txt](./licenses/quickjs.txt); the Apache-2.0 text is in
+[licenses/Apache-2.0.txt](./licenses/Apache-2.0.txt).
+
 ## .NET and NuGet dependencies
 
 The build tools bundle the following libraries. Except where noted, the MIT

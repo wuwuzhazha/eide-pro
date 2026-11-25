@@ -11,3 +11,6 @@
 *.zip binary
 *.exe binary
 *.dll binary
+
+# vendored quickjs runtime (the linux build has no file extension)
+res/scripts/qjs/** binary
