@@ -79,7 +79,7 @@ function readCustomDependence(prj: AbstractProject) {
         ProjectConfiguration.CUSTOM_GROUP_NAME, 'default');
 }
 
-function makeBuildResult(
+export function makeBuildResult(
     prj: AbstractProject,
     success: boolean,
     message: string,
