@@ -28,7 +28,10 @@ project and build model through a CLI and MCP server.
   Keil 5 (MDK), IAR, and Eclipse projects in the editor; an imported project
   gets a `miscInfo.uid` on import, so the CLI can open and build it directly.
   Standard Keil chip support packs can be installed for Cortex-M projects.
-  Whether importing preserves all Keil build semantics is unverified.
+  Keil import is verified end to end for sources, target/group/file defines and
+  group include paths, through a headless GCC build
+  ([status](./docs/keil-import-status.md)); RTE component resolution, ARMCC
+  output, and IAR/Eclipse persistence are still unverified.
 - **Build** — build, rebuild, and clean with the AC5, AC6, GCC, LLVM_ARM,
   IAR_ARM, Keil_C51, SDCC, GNU_SDCC_MCS51, IAR_STM8, COSMIC_STM8, RISCV_GCC,
   MTI_GCC, and ANY_GCC toolchains.

@@ -1,60 +1,100 @@
 # Keil / IAR / Eclipse import: verified status
 
-Baseline `ead8d57`. Read-only audit; product code untouched.
+Audit baseline `ead8d57`; verification baseline `9f97ce1`.
 
-## Conclusion: **B — narrow the promise**
-Import exists and writes an EIDE project, but nothing proves an imported project
-builds headlessly, and one hard gate blocks it today. README must not present
-import as a CLI/agent entry point until a fixture-backed test exists.
+## Verified: Keil 5 import → headless build
+
+`test/scripts/import-keil-e2e.test.ts` drives the real import entry
+(`importKeilProject`, `src/EIDEProjectExplorer.ts`) against
+`test/fixtures/keil-import/demo.uvprojx` (Cortex-M3, `STM32F103C8`, two source
+groups, two sources, target/group/file defines, group include path), then:
+
+1. asserts the import artifacts (`.eide/eide.yml`, `.eide/files.options.yml`,
+   `.eide/env.ini`): `miscInfo.uid`, both sources in their groups, target define
+   in `cppPreprocessAttrs.defineList`, group define + include path + file define
+   in `files.options.yml`, no CMSIS/RTE artifacts for an empty `<RTE>` section;
+2. loads the imported project headless (`AbstractProject.LoadForHeadless`),
+   switches it from the imported `AC5` to `GCC` with `setToolchain` and sets the
+   linker script — the same operation a user performs in the editor;
+3. opens it through `openHeadlessProject` (proves the `miscInfo.uid` gate) and
+   checks the build plan carries the imported sources, defines and per-file
+   options;
+4. runs a real `arm-none-eabi-gcc` build through `EideBuildService` and asserts
+   exit success, `demo.elf` (ELF magic), `demo.hex`;
+5. deletes `miscInfo.uid` and asserts `openHeadlessProject` rejects the project
+   again.
+
+The fixture sources are self-checking: `src/main.c` fails to compile with
+`#error` when the target, group or file define is missing, and cannot find
+`app_config.h` when the group include path is missing. A passing build therefore
+proves those Keil semantics survived the import.
+
+Run it with:
+
+```
+npm run compile && npm run compile:test
+node out/tmp/test/scripts/import-keil-e2e.test.js
+```
+
+The real-build assertions need `arm-none-eabi-gcc` on `PATH` (or `ARM_GCC_DIR`
+pointing at the toolchain install directory). Where the compiler is absent the
+test prints `SKIPPED:` and still runs the import/open/plan assertions;
+`EIDE_REQUIRE_ARM_GCC=1` turns the skip into a failure. No CI job currently runs
+`test/run-tests.js` with the ARM GCC toolchain installed, so on the `npm test`
+matrix the build assertions are skipped; the `headless-package` job that does
+install `gcc-arm-none-eabi` does not run this suite.
+
+## Fixed while verifying
+
+- **Group-level options were dropped** (`src/KeilXmlParser.ts`, `ARMParser`).
+  Keil keeps per-group `<GroupOption>/<GroupArmAds>/<Cads>/<VariousControls>`
+  defines and include paths; the parser only read the target level and
+  `<FileOption>`. Files in a group therefore compiled without the group's
+  `-D`/`-I` flags. Group options are now merged into the per-file options
+  (`files.options.yml`) of every file in the group, so their scoping is kept.
+- **An empty `<RTE>` section was treated as an RTE project**
+  (`src/KeilXmlParser.ts`, `ARMParser.ParseData`). `RTE.files` is present but
+  empty in almost every Keil project, so the parser produced an empty
+  `rte_deps` array, the importer entered its RTE branch, unpacked the CMSIS
+  header packs into `<project>/.cmsis`, and added a `RTE/_<target>` include path
+  that does not exist. `rte_deps` is now only set when the project really
+  declares RTE files.
+
+`miscInfo.uid` is written by the import itself (`ensureProjectUid` before
+`prjConfig.Save()`), so the headless `uid` gate no longer blocks an imported
+project.
+
+## Still unverified
+
+- **RTE dependency resolution**: the fixture declares no RTE components, so
+  `importCmsisHeaders`, instance resolution, `RTE/_<target>` includes and the
+  `keil.importer.warning.txt` report for unresolved dependencies never execute in
+  the test.
+- **Keil semantics beyond defines/includes**: undefines, per-file/group
+  `MiscControls`, disabled groups/files (`excludeList`), Keil user build
+  commands (before/after make), output name/directory (`env.ini`) are imported
+  but not asserted end to end.
+- **The imported AC5/AC6 toolchain**: ARMCC is not available in CI, so the test
+  switches to GCC like a user must. Whether the imported AC5/AC6 builder options
+  produce an identical ARMCC build is untested.
+- **C51 group-level options**: the fix above covers `ARMParser` only; the C51
+  parser reads target-level and file-level options and its group option layout
+  was not verified.
+- **IAR / Eclipse imports**: both remain editor-only and unpersisted
+  (`ImportIarProject`, `ImportEclipseProject`); nothing is verified for them.
+- **Chip-pack/device binding**: `Device`/`Vendor` are read from the Keil project
+  but no pack is installed or resolved by the test.
 
 ## Where import lives
-- Command `eide.operation.import_project` → `src/extension.ts:158`; dialogs and
-  parser choice `src/OperationExplorer.ts:530` (`uvprojx|uvproj`:580,
-  `cproject`:637, `eww`:665; emitted `:623/:651/:679`). Parsers `src/KeilXmlParser.ts`,
-  `src/IarProjectParser.ts`, `src/EclipseProjectParser.ts` return in-memory models.
-- `ProjectExplorer.ImportProject` (`src/EIDEProjectExplorer.ts:3210`, `:1911`) →
-  `ImportIarProject:1934`, `ImportEclipseProject:2218`, `ImportKeilProject:2479`.
-- Only Keil persists: `prjConfig.Save()` `:2840` (+ `.eide/env.ini`, `.eide/files.options.yml`), then `openWorkspace` `:2856`.
 
-## a. `miscInfo.uid` — absent after import
-`uid` is lazy (`src/EIDEProject.ts:924-928`), set only on load (`AfterLoad`,
-`:3293`); import never loads, so `.eide/eide.yml` is written without it. Gate:
-`src/headless/host.ts:194`. Measured on a copy of `test/e2e/fixtures/cortex-m3`
-with `miscInfo.uid` deleted:
-```
-$ node dist/eide_cli.js plan --project <tmp>
-error: Headless build requires an initialized project with miscInfo.uid; open the project in VS Code once to initialize it.
-EXIT=4
-```
-
-## b. `eide-cli plan` on an import — blocked
-`eide-cli plan` on a real import was not run (no fixture with sources); the uid gate
-is the first failure a CLI user hits.
-
-## c. Extension-only dependencies
-`getGlobalState()` `:2491`; CMSIS unpack via 7z (`importCmsisHeaders:1893`, used
-`:2599`); `vscode.workspace.openTextDocument`/`showTextDocument` `:2692-2693`;
-`vscode.window.showInformationMessage` `:2853`; `openWorkspace` `:2856`. CLI has no
-import command (`src/cli/args.ts:157`).
-
-## Fixtures
-```
-$ git ls-files | grep -iE "\.uvproj|\.ewp|\.cproject|mdk|iar"
-lang/arm.iar.verify.json  lang/stm8.iar.verify.json
-res/data/builtin_headers/lint_iararm.h  res/data/builtin_headers/lint_iarstm8.h
-res/data/models/arm.iar.model.json  res/data/models/stm8.iar.model.json
-res/template/ARM.uvprojx  res/template/C51.uvproj  src/IarProjectParser.ts
-```
-No import fixture, no `.ewp`/`.cproject` sample. The Keil files are export
-templates; the parser does read `res/template/ARM.uvprojx` (1 target, ARM, 1 group,
-0 sources), so only parsing is exercisable. A CI test needs a `.uvprojx` with ≥1
-source and a target, a linker script, plus `import → plan/build`.
-
-## README wording (README.md:24-26, README_ZH-CN.md:22-23)
-“create projects from built-in templates; Keil 5 (MDK), IAR and Eclipse projects
-can be imported **in the editor**, after which the project is a normal EIDE
-project”. 中文：“使用内置模板创建工程；Keil 5 (MDK)、IAR、Eclipse 工程可在编辑器内导
-入，导入后按普通 EIDE 工程使用。” Add to `docs/headless.md`: import is editor-only.
-
-## Unverified
-Imported builds after uid init; IAR/Eclipse persistence; chip-pack/RTE resolution.
+- Command `eide.operation.import_project` → `src/extension.ts`; dialogs and
+  parser choice `src/OperationExplorer.ts` (`OnImportProject`); emitted
+  `request_import_project`.
+- `ProjectDataProvider.ImportProject` dispatches to `ImportIarProject`,
+  `ImportEclipseProject` and `ImportKeilProject` in `src/EIDEProjectExplorer.ts`.
+  The Keil body is `ProjectDataProvider.importKeilProject`; the exported
+  `importKeilProject(option)` is the headless/test entry.
+- Only Keil persists: `prjConfig.Save()` plus `.eide/env.ini` and
+  `.eide/files.options.yml`, then `openWorkspace`.
+- Headless host: `src/headless/host.ts` (`initHeadlessRuntime`,
+  `openHeadlessProject`), build service `src/headless/build_service.ts`.

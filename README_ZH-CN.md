@@ -23,8 +23,10 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
   用 QEMU 实跑。见 [Headless CLI 与 MCP 指南](./docs/headless.md#mcp-server-stdio)。
 - **工程创建** — 使用内置模板创建工程，或在编辑器内导入 Keil 5 (MDK)、IAR、
   Eclipse 工程；导入即写入 `miscInfo.uid`，导入后的工程可直接被 CLI 打开和
-  构建。Cortex-M 工程可安装标准 Keil 芯片支持包。导入是否保留 Keil 的全部
-  构建语义，未验证。
+  构建。Cortex-M 工程可安装标准 Keil 芯片支持包。Keil 导入的源码、目标/分组/
+  文件级宏定义与分组头文件路径已通过 headless GCC 构建端到端验证
+  （[验证状态](./docs/keil-import-status.md)）；RTE 组件解析、ARMCC 产物以及
+  IAR/Eclipse 持久化仍未验证。
 - **构建** — 使用 AC5、AC6、GCC、LLVM_ARM、IAR_ARM、Keil_C51、SDCC、
   GNU_SDCC_MCS51、IAR_STM8、COSMIC_STM8、RISCV_GCC、MTI_GCC 和 ANY_GCC
   工具链进行编译、重新编译和清理。
