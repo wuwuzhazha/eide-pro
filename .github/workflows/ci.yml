@@ -159,6 +159,16 @@ jobs:
           node out/tmp/test/scripts/debug-qemu-session.test.js | tee "$RUNNER_TEMP/qemu-debug.log"
           grep -q 'QEMU DEBUG SESSION RAN' "$RUNNER_TEMP/qemu-debug.log"
 
+      - name: Run Keil import end-to-end test
+        timeout-minutes: 10
+        shell: bash
+        env:
+          EIDE_REQUIRE_ARM_GCC: '1'
+        run: |
+          set -euo pipefail
+          node out/tmp/test/scripts/import-keil-e2e.test.js | tee "$RUNNER_TEMP/keil-import-e2e.log"
+          grep -q 'All import keil e2e tests passed' "$RUNNER_TEMP/keil-import-e2e.log"
+
   toolchain-builds:
     name: Toolchain build (${{ matrix.template }})
     runs-on: ubuntu-latest
