@@ -39,6 +39,7 @@ import {
     appendMcpLog,
     attachFrameReader,
     getIpcPort,
+    ensureIpcPortAvailable,
     getLockPath,
     getLogPath,
     getMcpTmpDir,
@@ -190,7 +191,7 @@ function parseArgs(argv: string[]): ProxyArgs {
 
 async function main(): Promise<void> {
     const { port: httpPort, version, bundleId } = parseArgs(process.argv);
-    const ipcPort = getIpcPort(httpPort);
+    const ipcPort = await ensureIpcPortAvailable(httpPort);
     const mcpDir = getMcpTmpDir();
     const lockPath = getLockPath(httpPort);
     const logPath = getLogPath(httpPort);
@@ -441,6 +442,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(err => {
-    console.error(err);
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     process.exit(1);
 });

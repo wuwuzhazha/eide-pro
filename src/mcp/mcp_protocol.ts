@@ -84,6 +84,32 @@ export function getIpcPort(httpPort: number): number {
     return httpPort + 1;
 }
 
+export function probeLocalPort(port: number): Promise<'available' | 'occupied'> {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.once('error', error => {
+            if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+                resolve('occupied');
+                return;
+            }
+            reject(error);
+        });
+        server.listen(port, '127.0.0.1', () => {
+            server.close(() => resolve('available'));
+        });
+    });
+}
+
+export async function ensureIpcPortAvailable(httpPort: number): Promise<number> {
+    const ipcPort = getIpcPort(httpPort);
+    if (await probeLocalPort(ipcPort) === 'occupied') {
+        throw new Error(
+            `MCP IPC port ${ipcPort} is occupied. It is derived from EIDE.MCP.Server.Port (${httpPort}) + 1; ` +
+            'change EIDE.MCP.Server.Port or close the program using this port.');
+    }
+    return ipcPort;
+}
+
 export function getHealthUrl(httpPort: number): string {
     return `http://127.0.0.1:${httpPort}/health`;
 }
