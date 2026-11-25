@@ -175,6 +175,11 @@ jobs:
             expected_binary: sdcc
             required_binaries: sdcc,sdasstm8
             artifact_extensions: .hex,.ihx
+          - template: avr_atmega128_rtos
+            apt_package: gcc-avr,avr-libc
+            expected_binary: avr-gcc
+            required_binaries: avr-gcc,avr-g++,avr-objcopy,avr-ar,avr-ld
+            artifact_extensions: .elf,.hex,.bin
     steps:
       - name: Checkout
         timeout-minutes: 5
