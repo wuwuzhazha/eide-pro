@@ -96,7 +96,8 @@ export function resolveToolchainEnvironment(options: EnvironmentOptions): Enviro
     const model = JSON.parse(fs.readFileSync(modelPath, 'utf8'));
     searched.push(`model: ${NodePath.basename(modelPath)} global`);
     const names = candidateToolNames(model, platform);
-    const pathDirs = (options.envPath ?? process.env.PATH ?? '').split(NodePath.delimiter).filter(Boolean);
+    const pathDelimiter = platform === 'win32' ? ';' : ':';
+    const pathDirs = (options.envPath ?? process.env.PATH ?? '').split(pathDelimiter).filter(Boolean);
     searched.push('path: PATH');
     const xpackDir = NodePath.join(options.projectPath, 'xpacks');
     searched.push('xpack: xpacks/');

@@ -48,6 +48,15 @@ function run(): void {
         `missing tools report not-found without throwing (${JSON.stringify(notFound.tools)})`);
     assert(notFound.searched.length >= 4, `not-found includes a non-empty evidence chain (${JSON.stringify(notFound.searched)})`);
 
+    const linuxDirs = resolveToolchainEnvironment(baseOptions({
+        platform: 'linux',
+        envPath: '/missing/bin:/opt/gcc/bin',
+        fileExists: (path: string) => NodePath.resolve(path) === NodePath.resolve('/opt/gcc/bin/arm-none-eabi-gcc')
+    }));
+    const gccFromLinuxPath = linuxDirs.tools.find((tool: any) => tool.name === 'arm-none-eabi-gcc');
+    assert(gccFromLinuxPath.source === 'path',
+        `posix PATH splits on ':' regardless of the host (${JSON.stringify(gccFromLinuxPath)})`);
+
     const fakeToolchain = NodePath.join(process.cwd(), 'res', 'data', 'models');
     assert(fs.existsSync(fakeToolchain), 'fixture model directory exists');
 
