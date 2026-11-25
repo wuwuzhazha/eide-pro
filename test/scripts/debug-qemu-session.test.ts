@@ -252,11 +252,18 @@ async function run(): Promise<void> {
             typeof frame.functionName === 'string' && frame.functionName.includes('main')),
         'qemu: backtrace contains main');
 
+        const threadList = parse(await call('eide_debug_list_threads'));
+        console.log(`EVIDENCE threads=${JSON.stringify(threadList)}`);
+        assert(typeof threadList.currentThreadId === 'number',
+            'qemu: reports the current thread id');
+
         result = await call('eide_debug_select_frame', { level: 0 });
         assert(result.isError !== true && parse(result).success === true,
             'qemu: selects frame 0 before reading variables');
 
-        const variableResult = await call('eide_debug_list_variables', { frameLevel: 0 });
+        const variableResult = await call('eide_debug_list_variables', {
+            threadId: threadList.currentThreadId, frameLevel: 0
+        });
         const variables = variableResult.isError === true ? [] : parse(variableResult).variables;
         console.log(`EVIDENCE variables=${JSON.stringify(variableResult)}`);
         const localCounter = Array.isArray(variables)

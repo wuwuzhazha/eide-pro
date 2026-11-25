@@ -289,7 +289,8 @@ function/file/line/fullname. `eide_debug_list_breakpoints` returns breakpoint
 type, enabled state, address, source location, condition, hit count, and nested
 locations for multi-location breakpoints. `eide_debug_list_threads` returns
 `threads` and `currentThreadId`; `eide_debug_list_variables` returns local
-variables and arguments for the current or selected thread/frame. The step
+variables and arguments for the selected thread/frame, and a `frameLevel`
+argument requires the matching `threadId`. The step
 tools and `eide_debug_continue` return only stop events that happen after the
 resume call — never a stale event from before it. The session stays
 active until disconnect or server exit; only one session can exist at a time.

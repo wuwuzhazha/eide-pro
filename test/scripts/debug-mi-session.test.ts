@@ -391,12 +391,20 @@ async function testThreadsFramesAndVariables(): Promise<void> {
     );
     assertEqual(scoped.length, 3, 'scoped variable count');
 
-    await harness.session.listVariables({ frameLevel: 0 });
+    const frameOnly = await captureReject(
+        harness.session.listVariables({ frameLevel: 0 }),
+        'frame level without a thread id',
+    );
+    assertEqual(frameOnly.code, 'state', 'frame level without a thread id code');
+    assertEqual(harness.fake.written.length, 8, 'frame level without a thread id sends no command');
+
+    const threadOnly = await harness.session.listVariables({ threadId: 2 });
     assertEqual(
         harness.fake.written[8],
-        '9-stack-list-variables 1\n',
-        'frame-only variable list falls back to selected frame',
+        '9-stack-list-variables --thread 2 1\n',
+        'thread-only variable list command',
     );
+    assertEqual(threadOnly.length, 3, 'thread-only variable count');
     await harness.session.disconnect();
 
     const malformedThreads = createHarness((command, token) => {

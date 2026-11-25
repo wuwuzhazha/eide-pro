@@ -347,6 +347,14 @@ async function run(): Promise<void> {
     assert(data.threadId === 2 && data.frameLevel === 1 && data.variables[1].value === '1',
         'headless debug: scoped variables');
 
+    data = parse(await execute('eide_debug_list_variables', { uid: 'debug-uid', threadId: 2 }));
+    assert(data.threadId === 2 && data.frameLevel === undefined && data.variables.length === 2,
+        'headless debug: thread-scoped variables');
+
+    result = await execute('eide_debug_list_variables', { uid: 'debug-uid', frameLevel: 0 });
+    assert(result.isError === true && result.content[0].text.includes('requires a thread id'),
+        'headless debug: variables reject a frame level without a thread id');
+
     data = parse(await execute('eide_debug_step_over', {
         uid: 'debug-uid', stopTimeoutMs: 1000
     }));

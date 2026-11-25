@@ -452,10 +452,13 @@ export interface MiVariableOptions {
 }
 
 function variableListCommand(options: MiVariableOptions): string {
-    if (options.threadId !== undefined && options.frameLevel !== undefined) {
-        return `-stack-list-variables --thread ${options.threadId} --frame ${options.frameLevel} 1`;
+    if (options.threadId === undefined) {
+        return '-stack-list-variables 1';
     }
-    return '-stack-list-variables 1';
+    if (options.frameLevel === undefined) {
+        return `-stack-list-variables --thread ${options.threadId} 1`;
+    }
+    return `-stack-list-variables --thread ${options.threadId} --frame ${options.frameLevel} 1`;
 }
 
 export interface MiBreakpointLocation {
@@ -802,6 +805,12 @@ export class MiSession {
         if (options.frameLevel !== undefined
             && (!Number.isSafeInteger(options.frameLevel) || options.frameLevel < 0)) {
             throw new MiError('state', 'variable frame level must be a non-negative integer');
+        }
+        if (options.frameLevel !== undefined && options.threadId === undefined) {
+            throw new MiError(
+                'state',
+                'variable frame level requires a thread id: GDB cannot select a frame without a thread',
+            );
         }
         const record = await this.runCommand(variableListCommand(options), ['done']);
         const variablesRaw = record.results.variables;

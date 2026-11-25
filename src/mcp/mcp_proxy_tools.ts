@@ -535,9 +535,9 @@ export function createMcpServer(
                 inputSchema: {
                     uid: uidSchema,
                     threadId: z.number().int().positive().optional().describe(
-                        'Thread id; defaults to the current thread.'),
+                        'Thread id; omit to use the thread currently selected in GDB.'),
                     frameLevel: z.number().int().nonnegative().optional().describe(
-                        'Frame level; defaults to the selected frame.')
+                        'Frame level within threadId; omit to use the frame currently selected in GDB. Requires threadId.')
                 }
             },
             async (args) => delegateToolCall('eide_debug_list_variables', args)
