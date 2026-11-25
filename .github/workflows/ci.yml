@@ -168,9 +168,17 @@ jobs:
         env:
           EIDE_REQUIRE_ARM_GCC: '1'
         run: |
-          set -euo pipefail
-          node out/tmp/test/scripts/import-keil-e2e.test.js | tee "$RUNNER_TEMP/keil-import-e2e.log"
-          grep -q 'All import keil e2e tests passed' "$RUNNER_TEMP/keil-import-e2e.log"
+          set -uo pipefail
+          node out/tmp/test/scripts/import-keil-e2e.test.js 2>&1 | tee "$RUNNER_TEMP/keil-import-e2e.log"
+          status=${PIPESTATUS[0]}
+          echo "keil e2e exit: $status"
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          if ! grep -q 'All import keil e2e tests passed' "$RUNNER_TEMP/keil-import-e2e.log"; then
+            echo "::error::keil e2e success marker missing from the captured log"
+            exit 1
+          fi
 
   toolchain-builds:
     name: Toolchain build (${{ matrix.template }})
