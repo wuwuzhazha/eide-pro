@@ -126,6 +126,19 @@ async function run(): Promise<void> {
         console.error(`FAIL: QEMU breakpoint source not found at ${mainSource}`);
         process.exit(1);
     }
+    write(mainSource, [
+        'volatile unsigned int counter;',
+        '',
+        'int main(void)',
+        '{',
+        '    volatile int local_counter = 7;',
+        '    for (;;) {',
+        '        local_counter++;',
+        '        counter++;',
+        '    }',
+        '}',
+        ''
+    ].join('\n'));
     console.log(`OK: QEMU fixture prepared from ${fixture}`);
 
     const qemu = process.env.QEMU_SYSTEM_ARM || 'qemu-system-arm';
@@ -233,9 +246,17 @@ async function run(): Promise<void> {
         'qemu: backtrace contains main');
 
         const variableResult = await call('eide_debug_list_variables', { frameLevel: 0 });
-        assert(variableResult.isError !== true
-            && Array.isArray(parse(variableResult).variables),
+        const variables = variableResult.isError === true ? [] : parse(variableResult).variables;
+        const localCounter = Array.isArray(variables)
+            ? variables.find((variable: any) => variable?.name === 'local_counter') : undefined;
+        assert(localCounter !== undefined
+            && Number.isFinite(Number(localCounter.value)),
         'qemu: reads frame variables');
+
+        const evaluateResult = await call('eide_debug_evaluate', { expression: 'counter' });
+        const evaluated = evaluateResult.isError === true ? undefined : parse(evaluateResult);
+        assert(evaluated !== undefined && Number.isFinite(Number(evaluated.value)),
+            'qemu: evaluates global counter');
 
         const register = parse(await call('eide_debug_read_register', { name: 'pc' }));
         console.log(`EVIDENCE pc-after=${JSON.stringify(register.value)}`);
