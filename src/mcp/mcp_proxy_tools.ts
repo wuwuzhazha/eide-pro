@@ -403,7 +403,7 @@ export function createMcpServer(
                                 description: debugDescription('Read a CPU register from the active debug session.'),
                 inputSchema: {
                     uid: uidSchema,
-                    name: z.string().min(1).describe('Register name, for example "pc" or "cfsr".')
+                    name: z.string().min(1).describe('CPU register name, for example "pc" or "r0".')
                 }
             },
             async (args) => delegateToolCall('eide_debug_read_register', args)
@@ -622,7 +622,7 @@ export function createMcpServer(
             'eide_debug_fault',
             {
                 title: 'Decode Cortex Fault',
-                                description: debugDescription('Decode Cortex-M fault status registers. Reads HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.'),
+                                description: debugDescription('Decode Cortex-M fault status registers. Reads the memory-mapped SCB registers HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.'),
                 inputSchema: {
                     uid: uidSchema,
                     hfsr: z.number().int().nonnegative().optional(),

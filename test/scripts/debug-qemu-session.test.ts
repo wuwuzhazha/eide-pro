@@ -276,6 +276,25 @@ async function run(): Promise<void> {
         assert(typeof register.value === 'number' && register.value > 0,
             'qemu: reads a register');
 
+        const scbHfsr = parse(await call('eide_debug_read_memory', {
+            address: '0xE000ED04', length: 4
+        }));
+        const scbCfsr = parse(await call('eide_debug_read_memory', {
+            address: '0xE000ED28', length: 4
+        }));
+        console.log(`EVIDENCE scb-hfsr=${JSON.stringify(scbHfsr.hex)}`
+            + ` scb-cfsr=${JSON.stringify(scbCfsr.hex)}`);
+        assert(typeof scbHfsr.hex === 'string' && scbHfsr.hex.length === 8,
+            'qemu: reads the memory-mapped HFSR');
+        assert(typeof scbCfsr.hex === 'string' && scbCfsr.hex.length === 8,
+            'qemu: reads the memory-mapped CFSR');
+
+        const liveFaultResult = await call('eide_debug_fault', {});
+        const liveFault = parse(liveFaultResult);
+        console.log(`EVIDENCE live-fault=${JSON.stringify(liveFaultResult)}`);
+        assert(liveFaultResult.isError !== true && Array.isArray(liveFault.reasons),
+            'qemu: fault decoder reads SCB memory from the active session');
+
         const faultResult = await call('eide_debug_fault', {
             hfsr: 0, cfsr: 0, mmar: 0, bfar: 0
         });

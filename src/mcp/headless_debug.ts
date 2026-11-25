@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as NodePath from 'path';
-import { decodeCortexFault } from '../core/debug/fault';
+import { CORTEX_M_FAULT_REGISTERS, decodeCortexFault } from '../core/debug/fault';
 import {
     MiBreakpointRecord,
     MiFrame,
@@ -250,12 +250,13 @@ export class HeadlessDebugSession {
 
     async fault(args: Record<string, unknown>): Promise<any> {
         const session = this.session;
-        const read = async (name: string): Promise<number> => {
+        const read = async (name: keyof typeof CORTEX_M_FAULT_REGISTERS): Promise<number> => {
             if (args[name] !== undefined) {
                 return parseAddressValue(args[name], name);
             }
             if (session) {
-                return session.readRegister(name);
+                const bytes = await session.readMemory(CORTEX_M_FAULT_REGISTERS[name], 4);
+                return bytes.readUInt32LE(0);
             }
             throw new Error(`'${name}' is required when no debug session is active.`);
         };

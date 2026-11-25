@@ -48,6 +48,13 @@ export interface CortexFaultReport {
     busFaultAddress?: number;
 }
 
+export const CORTEX_M_FAULT_REGISTERS = {
+    hfsr: 0xe000ed04,
+    cfsr: 0xe000ed28,
+    mmar: 0xe000ed34,
+    bfar: 0xe000ed38,
+} as const;
+
 export const HFSR_BITS = {
     VECTTBL: 0x00000002,
     FORCED: 0x40000000,

@@ -83,6 +83,14 @@ class FakeGdb {
 }
 
 let malformed: 'none' | 'backtrace' | 'breakpoints' = 'none';
+let faultMemoryUnreadable = false;
+
+const SCB_CONTENTS: { [address: string]: string } = {
+    '0xe000ed04': '00000040',
+    '0xe000ed28': '81000000',
+    '0xe000ed34': '00000020',
+    '0xe000ed38': '00000008'
+};
 
 function response(command: string, token: number): string | string[] | undefined {
     if (command.startsWith('-gdb-set ')) {
@@ -106,18 +114,20 @@ function response(command: string, token: number): string | string[] | undefined
     if (command.startsWith('-data-evaluate-expression ')) {
         const expression = /^"\$(\w+)"$/.exec(command.slice('-data-evaluate-expression '.length));
         if (expression) {
-            const values: { [name: string]: string } = {
-                r0: '0x1234',
-                hfsr: '0x40000000',
-                cfsr: '0x81',
-                mmar: '0x20000000',
-                bfar: '0x08000000'
-            };
+            const values: { [name: string]: string } = { r0: '0x1234' };
             return `${token}^done,value="${values[expression[1]] || '0x0'}"\n(gdb) \n`;
         }
         return `${token}^done,value="42"\n(gdb) \n`;
     }
     if (command.startsWith('-data-read-memory-bytes ')) {
+        const match = /^-data-read-memory-bytes (0x[0-9a-f]+) 4$/.exec(command);
+        const contents = match === null ? undefined : SCB_CONTENTS[match[1]];
+        if (contents !== undefined) {
+            if (faultMemoryUnreadable) {
+                return `${token}^error,msg="Cannot access memory at address ${match![1]}"\n(gdb) \n`;
+            }
+            return `${token}^done,memory=[{offset="0x0",contents="${contents}"}]\n(gdb) \n`;
+        }
         return `${token}^done,memory=[{offset="0x0",contents="deadbeef"}]\n(gdb) \n`;
     }
     if (command.startsWith('-data-write-memory-bytes ')) {
@@ -376,6 +386,7 @@ async function run(): Promise<void> {
     }));
     assert(data.value === '42', 'headless debug: evaluate');
 
+    const beforeFault = harness.fake.written.length;
     data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
     assert(data.reasons.some((reason: any) => reason.code === 'FORCED'),
         'headless debug: fault reads registers');
@@ -383,6 +394,23 @@ async function run(): Promise<void> {
         'headless debug: fault decodes CFSR');
     assert(data.memManageAddressValid === true && data.memManageAddress === 0x20000000,
         'headless debug: fault address');
+    const faultCommands = harness.fake.written
+        .slice(beforeFault)
+        .map((line: string) => line.replace(/^\d+/, ''));
+    for (const address of ['0xe000ed04', '0xe000ed28', '0xe000ed34', '0xe000ed38']) {
+        assert(faultCommands.includes(`-data-read-memory-bytes ${address} 4\n`),
+            `headless debug: fault reads SCB memory at ${address}`);
+    }
+    assert(!faultCommands.some((line: string) =>
+        line.startsWith('-data-evaluate-expression "$hfsr"')),
+    'headless debug: fault does not treat SCB registers as CPU registers');
+
+    faultMemoryUnreadable = true;
+    result = await execute('eide_debug_fault', { uid: 'debug-uid' });
+    assert(result.isError === true
+        && result.content[0].text.includes('Cannot access memory at address 0xe000ed04'),
+    'headless debug: fault surfaces an unreadable SCB register');
+    faultMemoryUnreadable = false;
 
     data = parse(await execute('eide_debug_interrupt', { uid: 'debug-uid' }));
     assert(data.success === true, 'headless debug: interrupt');
