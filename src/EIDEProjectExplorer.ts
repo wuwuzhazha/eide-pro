@@ -168,6 +168,33 @@ export function initTemplateProjectConfig(pfile: File, projectName: string): voi
     pfile.Write(ProjectConfiguration.dumpProjectFile(prjConf));
 }
 
+function importCmsisHeaders(rootDir: File): string[] {
+
+    const result: string[] = [];
+
+    const headerInfos = ResManager.GetInstance().getCMSISHeaderPacks();
+    for (const info of headerInfos) {
+        const outDir = File.fromArray([rootDir.path, '.cmsis', info.name]);
+        if (!outDir.IsDir()) {
+            outDir.CreateDir(true);
+            const compresser = new SevenZipper(ResManager.GetInstance().Get7zDir());
+            compresser.UnzipSync(File.from(info.zippath), outDir);
+        }
+        info.exportIncs?.forEach(p => result.push(File.normalize(File.from(outDir.path, p).path)));
+    }
+
+    return result;
+}
+
+/**
+ * Import a Keil project into a new EIDE project folder.
+ * The import body is independent of the project tree, so the headless host
+ * and the tests drive it directly instead of constructing a data provider.
+ */
+export async function importKeilProject(option: ImportOptions): Promise<void> {
+    await ProjectDataProvider.importKeilProject(option);
+}
+
 enum TreeItemType {
     SOLUTION,
     PROJECT,
@@ -1905,24 +1932,6 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         }
     }
 
-    private importCmsisHeaders(rootDir: File): string[] {
-
-        const result: string[] = [];
-
-        const headerInfos = ResManager.GetInstance().getCMSISHeaderPacks();
-        for (const info of headerInfos) {
-            const outDir = File.fromArray([rootDir.path, '.cmsis', info.name]);
-            if (!outDir.IsDir()) {
-                outDir.CreateDir(true);
-                const compresser = new SevenZipper(ResManager.GetInstance().Get7zDir());
-                compresser.UnzipSync(File.from(info.zippath), outDir);
-            }
-            info.exportIncs?.forEach(p => result.push(File.normalize(File.from(outDir.path, p).path)));
-        }
-
-        return result;
-    }
-
     ImportProject(option: ImportOptions) {
 
         let catchErr = (error: any) => {
@@ -1933,7 +1942,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
 
         switch (option.type) {
             case 'mdk':
-                this.ImportKeilProject(option).catch(err => catchErr(err));
+                ProjectDataProvider.importKeilProject(option).catch(err => catchErr(err));
                 break;
             case 'eclipse':
                 this.ImportEclipseProject(option).catch(err => catchErr(err));
@@ -2493,7 +2502,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         }
     }
 
-    private async ImportKeilProject(option: ImportOptions) {
+    static async importKeilProject(option: ImportOptions) {
 
         const keilPrjFile = option.projectFile;
         const keilParser = KeilParser.NewInstance(option.projectFile, <any>option.mdk_prod);
@@ -2613,7 +2622,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         if (rte_deps) {
 
             /* import cmsis headers */
-            const incs: string[] = this.importCmsisHeaders(baseInfo.rootFolder);
+            const incs: string[] = importCmsisHeaders(baseInfo.rootFolder);
 
             /* try resolve all deps */
             const fileTypeMatchers: RegExp[] = [/source/, /header/];
