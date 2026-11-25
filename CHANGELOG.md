@@ -6,6 +6,43 @@ All notable version changes will be recorded in this file.
 
 ***
 
+### [Unreleased]
+
+**New**:
+  - Added an extension prompt that offers to install the separate `eide-cli` / `eide-mcp` package, with `EIDE.Tooling.PromptInstall`, prerequisite checks, retries for transient downloads, and Windows npm-shim handling.
+  - Added `eide-cli --version` / `-v` for tooling detection.
+  - The headless package now includes the MCP skill at `skills/eide-mcp-tools/SKILL.md`; `eide-mcp --print-skill` prints it from an installed package.
+  - MCP servers now negotiate the latest protocol and expose the same tool set over HTTP and stdio; `eide_get_environment` reports resolved tool paths with their `source` and searched locations.
+  - `eide_get_builder_opts_schema` accepts a dot-separated `path` and returns either compact top-level keys or the requested subtree.
+
+**Fixes**:
+  - Headless builds now give each build a unique `buildId` and `configHash`, return no `artifacts` on failure, report `failureKind`, and kill the whole process tree on timeout.
+  - CLI failures now emit one JSON object with `error.kind`; invalid invocations, project/environment configuration, external-tool failures, and unhandled errors map to distinct exit codes.
+  - Invalid `--toolchain-path` values, missing bundled resources, C51 `TOOLS.INI` paths, and invalid flash device settings are reported as configuration errors instead of generic failures.
+  - Project locks are created atomically with an owner PID, reclaim stale locks safely, and never overwrite a newer lock during retry or restore.
+  - Imported projects, template-created projects, and headless-created projects now persist `miscInfo.uid`, so the CLI can open them directly.
+  - GDB/MI step/continue tools return only stop events that follow the resume command; `eide_debug_list_variables` uses the portable MI form and reads the selected frame.
+  - VS Code HTTP MCP `eide_get_inc_dirs` and `eide_get_defines` now return the target lists their setters replace, not merged dependency values.
+  - The MCP proxy reports an occupied IPC port before startup and restarts once when the IPC channel is unreachable.
+  - Headless MCP calls and template extraction now have bounded timeouts; HTTP MCP builds use a bounded process runner.
+  - Build results list SDCC `.ihx` artifacts; the AVR RTOS template uses ISR macros.
+  - The MCP server identifies as `EIDE Pro` with the real extension version, and PATH resolution uses the platform-specific delimiter.
+  - Tooling installation retries transient network failures and verifies npm shims through ComSpec on Windows.
+
+**Changes**:
+  - Headless CLI and MCP now route `clean` and `flash` through a shared command kernel; `flash --dry-run` returns an `invocation` object and failures use the typed error envelope.
+  - MCP tool results provide the same JSON payload as `structuredContent` and as `content[0].text`; debug tools are listed on HTTP but return `UnsupportedTransport` with guidance to use stdio.
+  - In single-project headless mode, `uid` is optional in tool arguments; when supplied, it must still match the loaded project.
+  - The VSIX excludes internal task/process notes and the local `lib/node-utility` copy; release packaging verifies VSIX contents against tracked files.
+  - Removed the dead `EIDE.Option.EnableTelemetry` setting and replaced upstream/offline-help links with EIDE Pro's GitHub links; the feedback prompt no longer offers the upstream sponsor button.
+
+**Docs**:
+  - Refreshed English and Chinese READMEs, the headless guide, and the MCP skill for agent debugging, the unified tool surface, environment lookup, tool results, and EIDE Pro's HTTP MCP configuration example.
+  - Added and updated headless CI, migration, and import-status guides, including build caching, verified toolchain results, and the AVR/RISC-V limitations.
+  - Documented the separate extension and CLI/MCP installs, the tooling-install prompt, the example agent session, and the skill version and refresh workflow.
+
+***
+
 ### [v4.3.0]
 
 **New**:
