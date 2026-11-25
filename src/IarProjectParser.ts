@@ -116,8 +116,9 @@ export async function parseIarWorkbench(ewwFile: File, iarToolchainRoot: File): 
     const ewwDom = (await xml2js.parseStringPromise(
         fs.readFileSync(ewwFile.path).toString()))['workspace'];
 
+    // iar workbench files use windows path separators on every host
     const ewpFiles: string[] = toArray(ewwDom.project)
-        .map(n => resolveEnv(n.path[0] || ''))
+        .map(n => resolveEnv(n.path[0] || '').replace(/\\/g, '/'))
         .filter(p => p != '');
 
     //
