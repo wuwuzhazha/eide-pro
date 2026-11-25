@@ -292,7 +292,9 @@ locations for multi-location breakpoints. `eide_debug_list_threads` returns
 variables and arguments for the selected thread/frame, and a `frameLevel`
 argument requires the matching `threadId`. The step
 tools and `eide_debug_continue` return only stop events that happen after the
-resume call — never a stale event from before it. The session stays
+resume call; a stop that repeats the pre-resume PC without a breakpoint,
+watchpoint, or step result is flagged `stale: true` (a gdbstub can re-report
+its initial halt). Resume again when that flag is set. The session stays
 active until disconnect or server exit; only one session can exist at a time.
 
 Minimal debug loop (read frame variables only after `select_frame`):

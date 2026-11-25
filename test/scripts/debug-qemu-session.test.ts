@@ -225,13 +225,16 @@ async function run(): Promise<void> {
         let continueResult = await call('eide_debug_continue', { stopTimeoutMs: 10000 });
         let stopped = parse(continueResult);
         console.log(`EVIDENCE continue=${JSON.stringify(stopped)}`);
-        const stopFrame = stopped.results?.frame;
         const breakpointAddress = typeof breakpoint.address === 'number'
             ? `0x${breakpoint.address.toString(16)}` : undefined;
-        if (continueResult.isError !== true
-            && frameAddress(stopFrame) === pcBeforeAddress(pcBefore)
-            && frameAddress(stopFrame) !== breakpointAddress) {
-            console.log('EVIDENCE resume-retry=1');
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const attributed = stopped.stale === true;
+            const repeatsHaltedPc = frameAddress(stopped.results?.frame) === pcBeforeAddress(pcBefore)
+                && frameAddress(stopped.results?.frame) !== breakpointAddress;
+            if (continueResult.isError === true || (!attributed && !repeatsHaltedPc)) {
+                break;
+            }
+            console.log(`EVIDENCE resume-retry=${attributed ? 'stale-flag' : 'attribution-miss'}`);
             continueResult = await call('eide_debug_continue', { stopTimeoutMs: 10000 });
             stopped = parse(continueResult);
             console.log(`EVIDENCE continue-after-retry=${JSON.stringify(stopped)}`);

@@ -547,7 +547,7 @@ export function createMcpServer(
             'eide_debug_continue',
             {
                 title: 'Continue Execution',
-                                description: debugDescription('Resume the target and wait for the next stop event.'),
+                                description: debugDescription('Resume the target and wait for the next stop event. A stop flagged `stale: true` is suspected residue from before the resume; resume again.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -560,7 +560,7 @@ export function createMcpServer(
             'eide_debug_step_over',
             {
                 title: 'Step Over',
-                                description: debugDescription('Step over the current source line and wait for the next stop event.'),
+                                description: debugDescription('Step over the current source line and wait for the next stop event. A stop flagged `stale: true` is suspected residue from before the step; step again.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -573,7 +573,7 @@ export function createMcpServer(
             'eide_debug_step_into',
             {
                 title: 'Step Into',
-                                description: debugDescription('Step into the next function call and wait for the next stop event.'),
+                                description: debugDescription('Step into the next function call and wait for the next stop event. A stop flagged `stale: true` is suspected residue from before the step; step again.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema
@@ -586,7 +586,7 @@ export function createMcpServer(
             'eide_debug_step_out',
             {
                 title: 'Step Out',
-                                description: debugDescription('Run until the current function returns and wait for the next stop event.'),
+                                description: debugDescription('Run until the current function returns and wait for the next stop event. A stop flagged `stale: true` is suspected residue from before the step; step again.'),
                 inputSchema: {
                     uid: uidSchema,
                     stopTimeoutMs: stopTimeoutSchema

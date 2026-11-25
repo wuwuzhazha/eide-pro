@@ -587,6 +587,55 @@ async function testInterruptIgnoresStaleStop(): Promise<void> {
     await harness.session.disconnect();
 }
 
+async function testResumeAttribution(): Promise<void> {
+    const harness = createHarness((command, token) => {
+        if (command === '-exec-continue') {
+            return `${token}^running\n`;
+        }
+        return standardResponse(command, token);
+    });
+    await harness.session.connect('localhost:3333');
+    harness.fake.emitStdout('*stopped,reason="signal-received",signal-name="SIGTRAP",frame={level="0",addr="0x08000008",func="main"},thread-id="1"\n');
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="signal-received",signal-name="SIGTRAP",frame={level="0",addr="0x08000008",func="main"},thread-id="1"\n');
+    const repeatedHalt = await harness.session.waitForStop(100);
+    assertEqual(repeatedHalt.stale, true, 'a repeated halt after resume is flagged stale');
+    assertEqual(repeatedHalt.results.reason, 'signal-received', 'stale stop keeps its MI payload');
+
+    harness.fake.emitStdout('*stopped,reason="signal-received",signal-name="SIGTRAP",frame={level="0",addr="0x08000008",func="main"},thread-id="1"\n');
+    const secondOfRun = await harness.session.waitForStop(100);
+    assertEqual(secondOfRun.stale, undefined, 'only the first stop after a resume is classified');
+
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="breakpoint-hit",bkptno="1",frame={level="0",addr="0x08000008",func="main"},thread-id="1"\n');
+    const breakpointAtResume = await harness.session.waitForStop(100);
+    assertEqual(breakpointAtResume.stale, undefined, 'a breakpoint hit at the resume PC is not stale');
+
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="signal-received",frame={level="0",addr="0x08000020",func="main"},thread-id="1"\n');
+    const moved = await harness.session.waitForStop(100);
+    assertEqual(moved.stale, undefined, 'a stop at a different PC is not stale');
+
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="signal-received",frame={level="0",addr="0x08000020",func="worker"},thread-id="2"\n');
+    const otherThread = await harness.session.waitForStop(100);
+    assertEqual(otherThread.stale, undefined, 'a stop on another thread is not stale');
+    await harness.session.disconnect();
+
+    const fresh = createHarness((command, token) => {
+        if (command === '-exec-continue') {
+            return `${token}^running\n`;
+        }
+        return standardResponse(command, token);
+    });
+    await fresh.session.connect('localhost:3333');
+    await fresh.session.continue();
+    fresh.fake.emitStdout('*stopped,reason="signal-received",frame={level="0",addr="0x08000008"},thread-id="1"\n');
+    const noHistory = await fresh.session.waitForStop(100);
+    assertEqual(noHistory.stale, undefined, 'the first stop of a session is not stale');
+    await fresh.session.disconnect();
+}
+
 async function testCommandFailureModes(): Promise<void> {
     const exitDuringCommand = createHarness((command, token, fake) => {
         if (command.startsWith('-data-evaluate-expression ')) {
@@ -810,6 +859,7 @@ async function run(): Promise<void> {
     await testStopsAndInterrupt();
     await testContinueIgnoresStaleStop();
     await testInterruptIgnoresStaleStop();
+    await testResumeAttribution();
     await testCommandFailureModes();
     console.log('debug-mi-session tests passed');
 }

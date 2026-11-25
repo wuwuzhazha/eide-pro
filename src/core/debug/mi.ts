@@ -399,7 +399,16 @@ export class MiError extends Error {
 
 export type MiRemoteMode = 'remote' | 'extended-remote';
 
-export type MiStopEvent = MiAsyncRecord & { class: 'stopped' };
+export interface MiStopEvent extends MiAsyncRecord {
+    class: 'stopped';
+    /**
+     * Set on the first stop after a resume command when that stop repeats the
+     * previous stop's top-frame address and is not a breakpoint, watchpoint,
+     * or step result (for example a gdbstub re-reporting its initial halt).
+     * The event is still delivered; callers decide whether to resume again.
+     */
+    stale?: boolean;
+}
 
 interface SequencedStop {
     sequence: number;
@@ -535,6 +544,8 @@ export class MiSession {
     private readonly stopWaiters: StopWaiter[] = [];
     private stopSequence = 0;
     private resumeMinSequence = 0;
+    private resumePending = false;
+    private lastStop?: { address: number; threadId?: string };
 
     private process?: MiChildProcess;
     private started = false;
@@ -859,22 +870,22 @@ export class MiSession {
     }
 
     async continue(): Promise<void> {
-        this.resumeMinSequence = this.stopSequence + 1;
+        this.beginResume();
         await this.runCommand('-exec-continue', ['running', 'done']);
     }
 
     async stepOver(): Promise<void> {
-        this.resumeMinSequence = this.stopSequence + 1;
+        this.beginResume();
         await this.runCommand('-exec-next', ['running', 'done']);
     }
 
     async stepInto(): Promise<void> {
-        this.resumeMinSequence = this.stopSequence + 1;
+        this.beginResume();
         await this.runCommand('-exec-step', ['running', 'done']);
     }
 
     async stepOut(): Promise<void> {
-        this.resumeMinSequence = this.stopSequence + 1;
+        this.beginResume();
         await this.runCommand('-exec-finish', ['running', 'done']);
     }
 
@@ -1100,15 +1111,45 @@ export class MiSession {
 
     private publishStop(record: MiStopEvent): void {
         const sequence = ++this.stopSequence;
-        const event = { sequence, event: record };
+        const address = stopFrameAddress(record.results);
+        const threadId = stopThreadId(record.results);
+        const stale = this.consumeStaleFlag(record, address, threadId);
+        const event = stale ? { ...record, stale: true } : record;
+        this.lastStop = address === undefined ? undefined : { address, threadId };
         const index = this.stopWaiters.findIndex(waiter => sequence >= waiter.minSequence);
         const waiter = index === -1 ? undefined : this.stopWaiters.splice(index, 1)[0];
         if (waiter !== undefined) {
             clearTimeout(waiter.timer);
-            waiter.resolve(record);
+            waiter.resolve(event);
             return;
         }
-        this.stopQueue.push(event);
+        this.stopQueue.push({ sequence, event });
+    }
+
+    private beginResume(): void {
+        this.resumeMinSequence = this.stopSequence + 1;
+        this.resumePending = true;
+    }
+
+    private consumeStaleFlag(
+        record: MiStopEvent,
+        address: number | undefined,
+        threadId: string | undefined,
+    ): boolean {
+        if (!this.resumePending) {
+            return false;
+        }
+        this.resumePending = false;
+        const previous = this.lastStop;
+        if (previous === undefined || address === undefined || address !== previous.address) {
+            return false;
+        }
+        if (previous.threadId !== undefined && threadId !== undefined
+            && previous.threadId !== threadId) {
+            return false;
+        }
+        const reason = record.results.reason;
+        return !isExecutionHitReason(typeof reason === 'string' ? reason : undefined);
     }
 
     private consumeResumeMinSequence(): number {
@@ -1497,6 +1538,39 @@ function appendBreakpointLocation(breakpoint: MiBreakpointRecord, location: MiBr
     } else {
         breakpoint.locations.push(location);
     }
+}
+
+function isExecutionHitReason(reason: string | undefined): boolean {
+    switch (reason) {
+        case 'breakpoint-hit':
+        case 'watchpoint-trigger':
+        case 'read-watchpoint-trigger':
+        case 'access-watchpoint-trigger':
+        case 'end-stepping-range':
+        case 'function-finished':
+            return true;
+        default:
+            return false;
+    }
+}
+
+function stopFrameAddress(results: MiTuple): number | undefined {
+    const frame = results.frame;
+    if (frame === null || typeof frame !== 'object' || Array.isArray(frame)) {
+        return undefined;
+    }
+    const address = frame.addr;
+    if (typeof address !== 'string') {
+        return undefined;
+    }
+    const match = /^0x([0-9a-f]+)$/i.exec(address.trim());
+    const value = match === null ? NaN : Number.parseInt(match[1], 16);
+    return Number.isSafeInteger(value) ? value : undefined;
+}
+
+function stopThreadId(results: MiTuple): string | undefined {
+    const value = results['thread-id'];
+    return typeof value === 'string' ? value : undefined;
 }
 
 function parseTargetValue(text: string): number | undefined {
