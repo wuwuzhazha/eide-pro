@@ -22,25 +22,26 @@ groups, env.ini expansion, and virtual source folders.
 
 ## 1. Identify the server mode
 
-Both transports expose the **same tool set**. They differ in transport and in
-which backend executes the call, not in what the tools are called.
+Both transports expose the **same tool set**, and every tool is usable. They
+differ only in which transport a call must go through.
 
 | Mode | How it is configured | Requires VS Code | Executes in |
 |------|----------------------|------------------|-------------|
 | VS Code HTTP MCP | `http://localhost:8940/mcp` plus `EIDE.MCP.Server.Enable` | Yes, with the project open | The running extension |
 | Headless stdio MCP | `eide-mcp --project ...` from the headless package | No | Its own process |
 
-The one behavioural difference: **debug tools only work over stdio**. Over HTTP
-they are still listed, but calling one returns
+**Debug tools need the stdio transport.** A GDB session is stateful — it has to
+stay attached to one long-lived process — and the HTTP request path is
+stateless, so it cannot hold one. Over HTTP the debug tools are still listed,
+but calling one returns `UnsupportedTransport`:
 
 ```json
 {"success":false,"error":{"kind":"config","name":"UnsupportedTransport",
   "message":"Debug tools require the headless MCP (stdio). Start: eide-mcp --project <dir>"}}
 ```
 
-That is not a missing feature. A GDB session needs a long-lived process, which
-the HTTP request path does not provide. When you need debugging, start the
-headless server instead of concluding the tool does not exist.
+Treat that as "use the other transport", not as "this tool is unavailable".
+When a task needs debugging, connect over stdio and call the same tools there.
 
 The headless server discovers its projects from launch arguments, so there is
 no "add project" tool.
@@ -247,11 +248,12 @@ Both read `statistic.json` from the last successful build. If it is missing,
 enable the corresponding compiler options with `eide_set_builder_opts` and
 rebuild.
 
-## 6. Debugging (headless stdio only)
+## 6. Debugging (use the stdio transport)
 
-These tools are backed by a persistent GDB/MI session. Over HTTP they are
-listed but return `UnsupportedTransport`; start the headless server with
-`eide-mcp --project <dir> [--gdb <path>]` to use them.
+These tools are backed by a persistent GDB/MI session, so they must be called
+over the stdio transport (`eide-mcp --project <dir> [--gdb <path>]`). Over HTTP
+they return `UnsupportedTransport` — switch transports and call them there,
+rather than treating them as unavailable.
 
 Build the project before connecting; the default ELF is
 `<project>/<outDir>/<target>/<projectName>.elf`.

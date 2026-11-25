@@ -367,7 +367,7 @@ export function createMcpServer(
     if (options.debugTools) {
         const addressSchema = z.union([z.string(), z.number().int().nonnegative()]);
         const debugDescription = (description: string): string =>
-            `${description} Requires the headless (stdio) MCP server; over HTTP this tool returns UnsupportedTransport.`;
+            `${description} Call this over the stdio transport (eide-mcp --project <dir>); over HTTP it returns UnsupportedTransport, which means switch transports rather than that the tool is unavailable.`;
 
         server.registerTool(
             'eide_debug_connect',

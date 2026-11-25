@@ -81,7 +81,7 @@ function unsupportedDebugTransport(): CallToolResult {
         error: {
             kind: 'config',
             name: 'UnsupportedTransport',
-            message: 'Debug tools require the headless MCP (stdio). Start: eide-mcp --project <dir>'
+            message: 'This tool needs the stdio transport. Start eide-mcp --project <dir> and call it there.'
         }
     }, true);
 }
