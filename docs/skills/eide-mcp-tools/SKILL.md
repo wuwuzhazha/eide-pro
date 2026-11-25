@@ -51,14 +51,23 @@ Useful headless options: repeatable `--project`, `--target`, `--settings`
 (JSON file with `EIDE.*` values), `--gdb`, `--flasher-exe`,
 `--build-timeout`, `--flash-timeout`. A project managed by xpack does not need
 `--toolchain-path`; EIDE resolves the compiler from `package.json` and
-`xpacks/`.
+`xpacks/`. The skill ships with the headless package
+(`skills/eide-mcp-tools/SKILL.md` inside the package) and can be printed with
+`eide-mcp --print-skill`.
+
+## 1.5 Reading results
+
+Every tool result provides the JSON payload twice: as `structuredContent`
+(preferred) and as the same JSON in `content[0].text`. Prefer
+`structuredContent`; treat `isError: true` as failure.
 
 ## 2. Rules that prevent most failures
 
 1. **Always obtain the real project UID.** Read `miscInfo.uid` from
-   `<project>/.eide/eide.yml`; every tool schema requires `uid`. Do not invent
-   one. In a multi-project headless server, a wrong UID resolves to "Not such
-   project".
+   `<project>/.eide/eide.yml`. `uid` is optional in single-project headless
+   mode; required in multi-project headless and VS Code HTTP mode. Do not
+   invent one: a UID that does not match a loaded project resolves to
+   "Not such project".
 2. **Call tools sequentially.** The headless server queues calls internally,
    but sequential `get → set → verify` is easier to reason about and avoids
    overlapping long builds.
@@ -104,10 +113,19 @@ separated by `;`), `verify`, and `dryRun`. `dryRun=true` returns
 the configured flasher executable. `artifact` cannot be combined with
 `eraseAll=true`.
 
-A non-dry-run build returns JSON with `success`, `stage`, `problems`,
-`memory`, `artifacts`, `compileCommands` (when generated), `effectiveConfig`,
-and `logTail` on failure. Treat `isError: true` as failure and read the text
-content even when the JSON shape is unexpected.
+A non-dry-run build returns JSON with `success`, `buildId`, `configHash`,
+`stage`, `problems`, `memory`, `artifacts`, `compileCommands` (when
+generated), `effectiveConfig`, and `logTail` on failure. On failure,
+`artifacts` is always empty — never flash from `artifacts[0]` after a failed
+build — and `failureKind` is `build`, `timeout`, or `signal`. Treat
+`isError: true` as failure and read the text content even when the JSON shape
+is unexpected.
+
+Failures carry an `error` envelope: `{"success":false,"command":<name or
+null>,"error":{"kind","name","message"}}`. `error.kind` decides the next
+move: `usage` — fix the arguments; `config` — fix project or environment
+configuration; `tool` — install or repair the external tool; `internal` —
+report it as a bug.
 
 ### Build result example
 
@@ -116,10 +134,8 @@ content even when the JSON shape is unexpected.
   "success": true,
   "stage": "link",
   "problems": [],
-  "memory": {
-    "FLASH": { "used": 1148, "size": 131072, "percent": 0.88 },
-    "RAM": { "used": 284, "size": 20480, "percent": 1.39 }
-  },
+  "memory": { "FLASH": { "used": 1148, "size": 131072, "percent": 0.88 },
+              "RAM": { "used": 284, "size": 20480, "percent": 1.39 } },
   "artifacts": ["build/Debug/demo.elf", "build/Debug/demo.hex"],
   "compileCommands": "build/Debug/compile_commands.json",
   "effectiveConfig": {
@@ -132,25 +148,13 @@ content even when the JSON shape is unexpected.
 ```
 
 `problems` entries contain `file`, `line`, `column`, `severity`, `code`, and
-`message`. On failure, `logTail` contains the useful compiler/linker tail even
-when no `compiler.log` was produced.
+`message`. On failure, `logTail` contains the compiler/linker tail even when
+no `compiler.log` was produced.
 
 ### `dryRun`
 
-`eide_build(uid, dryRun=true)` writes `builder.params` and returns:
-
-```json
-{
-  "success": true,
-  "dryRun": true,
-  "buildId": "...",
-  "outDir": "...",
-  "builder": ".../unify_builder.exe",
-  "args": ["-p", ".../builder.params", "--no-color"],
-  "paramsFile": ".../builder.params",
-  "params": { "target": "Debug", "toolchain": "GCC", "defines": [], "incDirs": [] }
-}
-```
+`eide_build(uid, dryRun=true)` writes `builder.params` and returns `buildId`,
+`outDir`, `builder`, `args`, `paramsFile`, and the full `params` object.
 
 Use it to verify overrides, include paths, dependency expansion, and env.ini
 values before spending time on a build.
@@ -186,7 +190,7 @@ All of these require `uid`.
 | `eide_set_inc_dirs` | `paths[]` | Replace target include list |
 | `eide_get_defines` | — | Target `cppPreprocessAttrs.defineList` |
 | `eide_set_defines` | `defines[]` | Replace target define list |
-| `eide_get_builder_opts_schema` | — | Toolchain JSON schema |
+| `eide_get_builder_opts_schema` | `path?` | Schema subtree for `path`; without `path`, only top-level keys with descriptions |
 | `eide_get_builder_opts` | — | Current toolchain options |
 | `eide_set_builder_opts` | `options{}` | Replace toolchain options |
 
@@ -197,8 +201,10 @@ in the build automatically.
 Headless and VS Code MCP both resolve the builder-options schema from the
 project's active toolchain in the extension `lang` directory. `eide_set_builder_opts`
 validates against that schema before saving, so call `eide_get_builder_opts_schema`
-without `path` first to see the top-level keys, then call it again with the desired
-dot-separated `path` before sending the complete options object.
+without `path` first to see the top-level keys (a compact list with
+descriptions, not the full schema), then call it again with the desired
+dot-separated `path` to fetch that subtree before sending the complete options
+object. An unknown `path` fails with a `ConfigError`.
 
 ## 5. Build analysis
 
@@ -228,7 +234,7 @@ before connecting; the default ELF is
 | `eide_debug_remove_breakpoint` | `uid`, `id` |
 | `eide_debug_backtrace` | `uid`, `maxDepth?` (1–200, default all frames) |
 | `eide_debug_list_breakpoints` | `uid` |
-| `eide_debug_list_threads` | `uid` |
+| `eide_debug_list_threads` | `uid` | 
 | `eide_debug_select_thread` | `uid`, `id` |
 | `eide_debug_select_frame` | `uid`, `level` (0 is innermost) |
 | `eide_debug_list_variables` | `uid`, optional `threadId`, `frameLevel` |
@@ -249,22 +255,33 @@ type, enabled state, address, source location, condition, hit count, and nested
 locations for multi-location breakpoints. `eide_debug_list_threads` returns
 `threads` and `currentThreadId`; `eide_debug_list_variables` returns local
 variables and arguments for the current or selected thread/frame. The step
-tools and `eide_debug_continue` wait for the next stop event. The session stays
+tools and `eide_debug_continue` return only stop events that happen after the
+resume call — never a stale event from before it. The session stays
 active until disconnect or server exit; only one session can exist at a time.
 
-Debug workflow:
+Minimal debug loop (read frame variables only after `select_frame`):
+
+```text
+eide_debug_connect(uid, target="localhost:3333")
+eide_debug_set_breakpoint(uid, location="main.c:42")
+eide_debug_continue(uid)                  # returns the stop at the breakpoint
+eide_debug_select_frame(uid, level=0)     # required before list_variables
+eide_debug_list_variables(uid)
+eide_debug_backtrace(uid, maxDepth=20)
+eide_debug_disconnect(uid)
+```
+
+Full tool reference:
 
 ```text
 eide_debug_connect(uid, target="localhost:3333")
 eide_debug_set_breakpoint(uid, location="main")
 eide_debug_continue(uid)
 eide_debug_list_threads(uid)
-eide_debug_backtrace(uid, maxDepth=20)
 eide_debug_select_frame(uid, level=0)
 eide_debug_list_variables(uid)
-eide_debug_step_over(uid)
-eide_debug_step_into(uid)
-eide_debug_step_out(uid)
+eide_debug_backtrace(uid, maxDepth=20)
+eide_debug_step_over(uid) / eide_debug_step_into(uid) / eide_debug_step_out(uid)
 eide_debug_list_breakpoints(uid)
 eide_debug_read_register(uid, name="pc")
 eide_debug_evaluate(uid, expression="counter")
@@ -321,7 +338,7 @@ eide_debug_disconnect(uid)
 | `Not such project (uid=...)` | UID mismatch, or multiple headless projects and the UID belongs to another project. Re-read `miscInfo.uid`. |
 | `Toolchain 'X' is not installed or its path is not configured` | Pass `--toolchain-path` or `--settings` to headless, or configure the toolchain in VS Code. |
 | `gcc is not available from xpack` | Run `xpm install` in the project directory, or stop using the xpack path. |
-| `Builder options schema not found` | The extension `lang` directory is incomplete or the active toolchain has no schema file. Reinstall the extension or verify `lang/<toolchain>.verify.json`. |
+| `Builder options schema not found` | The extension `lang` directory is incomplete or the toolchain has no schema file; verify `lang/<toolchain>.verify.json`. |
 | VS Code MCP connection refused | VS Code is not running or the project is not open; check `EIDE.MCP.Server.Enable` and port 8940. |
 | Headless MCP process exits | Read the server's stderr; usually invalid `--project`, bundled resources, or project config. |
 | `A debug session is already active` | Call `eide_debug_disconnect` before connecting again. |

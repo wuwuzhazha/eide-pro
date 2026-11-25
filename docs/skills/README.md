@@ -6,6 +6,9 @@ stack/callgraph queries, and GDB debugging.
 
 ## Download
 
+- Headless package (preferred): the skill ships inside
+  `eide-pro-headless-<version>.tgz` at `skills/eide-mcp-tools/SKILL.md`, or
+  print it with `eide-mcp --print-skill`.
 - Direct file:
   https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/skills/eide-mcp-tools/SKILL.md
 - Release archive (latest):
