@@ -153,6 +153,13 @@ import { NodeProcessRunner, ProcessTimeoutError } from './core/process_runner';
 
 const BUILD_PROCESS_TIMEOUT_MS = 280 * 1000;
 
+export function ensureProjectUid(prjConfig: ProjectConfiguration<any>): void {
+    const config = prjConfig.config;
+    if (config.miscInfo.uid == undefined) {
+        config.miscInfo.uid = md5(`${prjConfig.GetFile().dir}-${Date.now()}`);
+    }
+}
+
 enum TreeItemType {
     SOLUTION,
     PROJECT,
@@ -2837,6 +2844,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         }
 
         // save all config
+        ensureProjectUid(baseInfo.prjConfig);
         baseInfo.prjConfig.Save();
 
         // save env
