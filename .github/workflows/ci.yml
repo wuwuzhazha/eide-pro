@@ -98,3 +98,42 @@ jobs:
 
       - name: Run installed-package E2E
         run: npm run test:headless-package
+
+      - name: Assert failing build contract
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cp -r test/e2e/fixtures/cortex-m3 "$work/project"
+          set +e
+          node dist/eide_cli.js build --project "$work/project" --toolchain-path /usr --timeout 120000 \
+            > "$work/first.json" 2> "$work/first.log"
+          first_status=$?
+          set -e
+          sed -i 's/counter++;/counter++/' "$work/project/src/main.c"
+          set +e
+          node dist/eide_cli.js build --project "$work/project" --toolchain-path /usr --timeout 120000 \
+            > "$work/second.json" 2> "$work/second.log"
+          second_status=$?
+          set -e
+          node -e '
+            const fs = require("fs");
+            const [firstStatus, secondStatus, firstPath, secondPath] = process.argv.slice(1);
+            const first = JSON.parse(fs.readFileSync(firstPath, "utf8"));
+            const second = JSON.parse(fs.readFileSync(secondPath, "utf8"));
+            const fail = message => {
+              console.error(`FAIL: ${message}`);
+              console.error(JSON.stringify({ firstStatus, secondStatus, first, second }, null, 2));
+              process.exit(1);
+            };
+            if (Number(firstStatus) !== 0 || first.success !== true) fail("first build");
+            if (Number(secondStatus) !== 2) fail("second exit code");
+            if (second.success !== false) fail("second success");
+            if (!Array.isArray(second.artifacts) || second.artifacts.length !== 0) fail("artifacts");
+            if (second.failureKind !== "build") fail("failureKind");
+            if (!first.buildId || first.buildId === second.buildId) fail("buildId");
+            if (!first.configHash || first.configHash !== second.configHash) fail("configHash");
+            if (second.stage !== "compile") fail("stage");
+            console.log("failure contract verified");
+          ' "$first_status" "$second_status" "$work/first.json" "$work/second.json"
