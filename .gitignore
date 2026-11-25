@@ -55,3 +55,6 @@ dotnet-runtime*.exe
 /src/html/**/node_modules
 /src/html/callgraph_view/dist
 /src/html/callgraph_view/fixtures
+
+# local task cards (dispatch artifacts, not shipped)
+.tasks/

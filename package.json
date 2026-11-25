@@ -72,6 +72,8 @@
         "type": "git"
     },
     "scripts": {
+        "check:task-card": "node scripts/verify-task-card.js",
+        "check:branch": "node scripts/check-branch-state.js",
         "vscode:prepublish": "webpack --mode production && webpack --config webpack.headless.config.js",
         "webpack": "webpack --mode development",
         "webpack:headless": "webpack --config webpack.headless.config.js",
