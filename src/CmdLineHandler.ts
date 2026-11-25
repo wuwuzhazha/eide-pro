@@ -53,5 +53,12 @@ export class CmdLineHandler {
 
     static quoteString(str: string, quote: string): string {
         return (str.includes(' ') && !str.includes(quote)) ? (quote + str + quote) : str;
+        if (str !== '' && !/[\s&()^%<>|;,"']/.test(str)) {
+            return str;
+        }
+        const escaped = quote === '"'
+            ? str.replace(/"/g, '""')
+            : str.replace(/'/g, "''");
+        return quote + escaped + quote;
     }
 }
