@@ -30,8 +30,9 @@ project and build model through a CLI and MCP server.
   Standard Keil chip support packs can be installed for Cortex-M projects.
   Keil import is verified end to end for sources, target/group/file defines and
   group include paths, through a headless GCC build
-  ([status](./docs/keil-import-status.md)); RTE component resolution, ARMCC
-  output, and IAR/Eclipse persistence are still unverified.
+  ([status](./docs/keil-import-status.md)). IAR and Eclipse import persistence
+  and headless loadability are verified too; RTE component resolution and ARMCC
+  output are still unverified.
 - **Build** — build, rebuild, and clean with the AC5, AC6, GCC, LLVM_ARM,
   IAR_ARM, Keil_C51, SDCC, GNU_SDCC_MCS51, IAR_STM8, COSMIC_STM8, RISCV_GCC,
   MTI_GCC, and ANY_GCC toolchains.

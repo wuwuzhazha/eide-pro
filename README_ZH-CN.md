@@ -25,8 +25,8 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
   Eclipse 工程；导入即写入 `miscInfo.uid`，导入后的工程可直接被 CLI 打开和
   构建。Cortex-M 工程可安装标准 Keil 芯片支持包。Keil 导入的源码、目标/分组/
   文件级宏定义与分组头文件路径已通过 headless GCC 构建端到端验证
-  （[验证状态](./docs/keil-import-status.md)）；RTE 组件解析、ARMCC 产物以及
-  IAR/Eclipse 持久化仍未验证。
+  （[验证状态](./docs/keil-import-status.md)）。IAR 与 Eclipse 导入的持久化与
+  headless 可加载性也已验证；RTE 组件解析与 ARMCC 产物仍未验证。
 - **构建** — 使用 AC5、AC6、GCC、LLVM_ARM、IAR_ARM、Keil_C51、SDCC、
   GNU_SDCC_MCS51、IAR_STM8、COSMIC_STM8、RISCV_GCC、MTI_GCC 和 ANY_GCC
   工具链进行编译、重新编译和清理。
