@@ -314,15 +314,24 @@ async function run(): Promise<void> {
         `uid gate: removing miscInfo.uid is rejected again (${uidFailure})`);
 }
 
+function cleanup(): void {
+    try {
+        fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    } catch (error) {
+        fs.writeSync(2,
+            `cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+}
+
 run()
     .then(() => {
         console.log('All import keil e2e tests passed.');
-        fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+        cleanup();
         process.exit(0);
     })
     .catch(error => {
         console.error(error);
-        fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+        cleanup();
         process.exit(1);
     });
 export {};
