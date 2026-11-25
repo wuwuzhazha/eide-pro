@@ -225,6 +225,4 @@ jobs:
 
       - name: Verify toolchain build
         timeout-minutes: 10
-        env:
-          TOOLCHAIN_ROOT: ${{ runner.temp }}/toolchain
         run: node scripts/verify-toolchain-build.js "${{ matrix.template }}" "${{ matrix.apt_package }}" "${{ matrix.expected_binary }}" "${{ matrix.artifact_extension }}"
