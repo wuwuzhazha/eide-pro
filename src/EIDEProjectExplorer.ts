@@ -121,7 +121,7 @@ import {
     cxxDemangle,
     DEBUGGER_MAPS
 } from './utility';
-import { concatSystemEnvPath, DeleteDir, exeSuffix, kill, osType, DeleteAllChildren, userhome, getGlobalState } from './Platform';
+import { concatSystemEnvPath, DeleteDir, exeSuffix, getArchId, kill, osType, DeleteAllChildren, userhome, getGlobalState } from './Platform';
 import { KeilARMOption, KeilC51Option, KeilParser, KeilRteDependence } from './KeilXmlParser';
 import { VirtualDocument } from './VirtualDocsProvider';
 import { ResInstaller } from './ResInstaller';
@@ -6474,7 +6474,11 @@ export class ProjectExplorer implements CustomConfigurationProvider {
             //
             // select importer
             //
-            const scriptRoot = File.fromArray([ResManager.GetInstance().getBinDir().path, 'scripts']);
+            const scriptRoot = ResManager.GetInstance().getBuiltInScriptsDir();
+            const qjsExe = ResManager.GetInstance().getBuiltInQjsExe();
+            if (!qjsExe) {
+                throw new Error(`The project importer needs the built-in QuickJS runtime, which is not bundled for '${osType()}-${getArchId()}'`);
+            }
             const imptrFolder = File.fromArray([scriptRoot.path, 'importer']);
             const items: any[] = [];
 
@@ -6535,7 +6539,7 @@ export class ProjectExplorer implements CustomConfigurationProvider {
                     const imptrName = (<File>imptrType.file).noSuffixName;
                     const cmds = ['--std', './importer/index.js', imptrName, prjFile.path];
                     const result = child_process
-                        .execFileSync(`${scriptRoot.path}/qjs${exeSuffix()}`, cmds, { cwd: scriptRoot.path })
+                        .execFileSync(qjsExe.path, cmds, { cwd: scriptRoot.path })
                         .toString();
 
                     let prjList: ImporterProjectInfo[];

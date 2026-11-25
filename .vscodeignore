@@ -29,6 +29,7 @@ vsc-extension-quickstart.md
 !dist/extension.js
 !dist/mcp_server.js
 !dist/eide_cli.js
+!res/scripts/**/*.js
 !dist/eide_mcp.js
 *.cpuprofile
 *.vscodeignore

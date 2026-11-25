@@ -1,5 +1,10 @@
 /*
     MIT License
+        const qjsExe = resManager.getBuiltInQjsExe();
+        if (qjsExe) {
+            exelist.push(qjsExe.path);
+        }
+
 
     Copyright (c) 2019 github0null
 

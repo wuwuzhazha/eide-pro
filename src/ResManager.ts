@@ -76,6 +76,25 @@ export interface FileCacheInfo {
     version?: string;
     sha?: string;
     lastUpdateTime?: number;
+    'scripts': 'res' + File.sep + 'scripts',
+    getBuiltInScriptsDir(): File {
+        return <File>this.GetDir('scripts');
+    }
+
+    /**
+     * QuickJS runtime that executes the built-in project importers.
+     * Undefined on platforms for which no runtime is bundled.
+     */
+    getBuiltInQjsExe(): File | undefined {
+        const exe = File.fromArray([
+            this.getBuiltInScriptsDir().path,
+            'qjs',
+            `${osType()}-${getArchId()}`,
+            `qjs${exeSuffix()}`
+        ]);
+        return exe.IsFile() ? exe : undefined;
+    }
+
 }
 
 export interface HostInfo {
