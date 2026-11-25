@@ -1,4 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import * as fs from 'fs';
+import * as NodePath from 'path';
 import { NodeProcessRunner } from '../core/process_runner';
 import { StderrLogger } from '../core/logger';
 import { bundledResourcesDir } from '../headless/package_paths';
@@ -22,6 +24,7 @@ const usage = [
     '      --gdb <path>          GDB executable (default: arm-none-eabi-gdb)',
     '      --build-timeout <ms>  Build timeout (default: 1800000)',
     '      --flash-timeout <ms>  Flash timeout (default: 120000)',
+    '      --print-skill        Print the bundled MCP skill and exit',
     '  -h, --help                Show this help'
 ].join('\n');
 
@@ -61,6 +64,19 @@ interface ServerArguments {
     flashTimeoutMs: number;
 }
 
+function printSkill(): number {
+    const candidates = [
+        NodePath.resolve(__dirname, '..', 'skills', 'eide-mcp-tools', 'SKILL.md'),
+        NodePath.resolve(__dirname, '..', 'docs', 'skills', 'eide-mcp-tools', 'SKILL.md')
+    ];
+    const skillPath = candidates.find(candidate => fs.existsSync(candidate));
+    if (!skillPath) {
+        throw new Error(`MCP skill not found. Tried:\n${candidates.join('\n')}`);
+    }
+    process.stdout.write(fs.readFileSync(skillPath));
+    return 0;
+}
+
 function parseArguments(argv: string[]): ServerArguments | undefined {
     const projectPaths: string[] = [];
     let target: string | undefined;
@@ -76,6 +92,8 @@ function parseArguments(argv: string[]): ServerArguments | undefined {
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
         switch (arg) {
+            case '--print-skill':
+                return undefined;
             case '-h':
             case '--help':
                 return undefined;
@@ -147,6 +165,9 @@ function parseArguments(argv: string[]): ServerArguments | undefined {
 }
 
 export async function main(argv: string[]): Promise<number> {
+    if (argv.includes('--print-skill')) {
+        return printSkill();
+    }
     let args: ServerArguments | undefined;
     try {
         args = parseArguments(argv);

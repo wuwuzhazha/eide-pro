@@ -248,6 +248,9 @@ The server exposes the same project/build tools as the VS Code MCP server:
 - builder-options schema and validation for every registered toolchain
 - stack usage and callgraph from `statistic.json`
 
+The agent skill is shipped at `skills/eide-mcp-tools/SKILL.md` inside the headless package.
+Run `eide-mcp --print-skill` to print it directly from the installed package.
+
 It additionally exposes debug tools, backed by GDB/MI:
 
 - `eide_debug_connect`, `eide_debug_disconnect`

@@ -15,6 +15,7 @@ const REQUIRED_PACKAGE_FILES = [
     'res/tools/darwin/unify_builder/x86_64/unify_builder',
     'res/tools/darwin/unify_builder/arm64/unify_builder',
     'lang/arm.gcc.verify.json',
+    'skills/eide-mcp-tools/SKILL.md',
     'README.md',
     'LICENSE'
 ];
@@ -82,6 +83,7 @@ function writePackageJson(root, staging) {
             'dist',
             'res',
             'lang',
+        'skills',
             'README.md',
             'LICENSE',
             'THIRD_PARTY_NOTICES.md',
@@ -114,6 +116,9 @@ function copyPayload(root, staging) {
     }
     requireDirectory(path.join(root, 'lang'));
     copy(path.join(root, 'lang'), path.join(staging, 'lang'));
+    requireFile(path.join(root, 'docs', 'skills', 'eide-mcp-tools', 'SKILL.md'));
+    copy(path.join(root, 'docs', 'skills', 'eide-mcp-tools', 'SKILL.md'),
+        path.join(staging, 'skills', 'eide-mcp-tools', 'SKILL.md'));
     requireFile(path.join(root, 'docs', 'headless.md'));
     copy(path.join(root, 'docs', 'headless.md'), path.join(staging, 'README.md'));
 }

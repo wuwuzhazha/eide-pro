@@ -84,6 +84,8 @@ async function main() {
         assert(fs.existsSync(mcp), 'installed package contains eide-mcp');
         assert(!fs.existsSync(path.join(installedRoot, 'res', 'html')),
             'installed package excludes editor-only res/html');
+        const skill = path.join(installedRoot, 'skills', 'eide-mcp-tools', 'SKILL.md');
+        assert(fs.existsSync(skill), 'installed package contains the MCP skill');
 
         const help = runNode([cli, '--help'], workspace);
         assert(help.status === 0 && help.stdout.includes('Usage:'), 'installed eide-cli starts');
@@ -93,6 +95,14 @@ async function main() {
         assert(installedVersion.status === 0, `installed eide-cli reports a version\n${installedVersion.stderr}`);
         assert(installedVersion.stdout === `${packageJson.version}\n`,
             `installed eide-cli version matches package.json (${installedVersion.stdout.trim()})`);
+
+        const printedSkill = runNode([mcp, '--print-skill'], workspace);
+        const bundledSkill = fs.readFileSync(skill);
+        assert(printedSkill.status === 0, `installed eide-mcp prints the skill\n${printedSkill.stderr}`);
+        assert(Buffer.compare(Buffer.from(printedSkill.stdout), bundledSkill) === 0,
+            'installed eide-mcp --print-skill matches the bundled skill byte for byte');
+        assert(printedSkill.stdout.includes('name: eide-mcp-tools'),
+            'installed eide-mcp --print-skill contains the skill frontmatter');
 
         const project = path.join(workspace, 'project');
         fs.cpSync(path.join(__dirname, 'fixtures', 'cortex-m3'), project, { recursive: true });
