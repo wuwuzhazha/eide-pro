@@ -37,19 +37,33 @@ interface BuildFailureInfo {
     failureKind?: 'timeout' | 'signal' | 'build';
     analysisError?: string;
     logTail?: string;
+    effectiveConfig?: { outDir?: string };
+}
+
+function readLogTail(path: string): string {
+    try {
+        return fs.readFileSync(path, 'utf8').split(/\r\n|\n/).slice(-40).join('\n').trim();
+    } catch {
+        return '';
+    }
 }
 
 function buildDiagnostics(result: BuildFailureInfo): string {
-    const tail = typeof result.logTail === 'string' && result.logTail.length > 0
-        ? result.logTail.split(/\r\n|\n/).slice(-40).join('\n')
-        : '(no build log)';
-    return [
+    const outDir = result.effectiveConfig?.outDir;
+    const compilerLog = outDir === undefined ? '' : readLogTail(NodePath.join(outDir, 'compiler.log'));
+    const builderLog = outDir === undefined ? '' : readLogTail(NodePath.join(outDir, 'unify_builder.log'));
+    const tail = result.logTail ?? compilerLog;
+    const lines = [
         `stage: ${result.stage}`,
         `failureKind: ${result.failureKind ?? 'none'}`,
         `analysisError: ${result.analysisError ?? 'none'}`,
         'logTail:',
-        tail
-    ].join('\n');
+        tail.length > 0 ? tail : '(no build log)'
+    ];
+    if (builderLog.length > 0) {
+        lines.push('builderLog:', builderLog);
+    }
+    return lines.join('\n');
 }
 
 function memento(): any {
