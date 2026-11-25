@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+    <fileVersion>3</fileVersion>
+
+    <configuration>
+        <name>Debug</name>
+        <settings>
+            <name>ICCARM</name>
+            <data>
+                <option>
+                    <name>CCDefines</name>
+                    <state>USE_HAL_DRIVER</state>
+                    <state>STM32F103xB</state>
+                    <state></state>
+                </option>
+                <option>
+                    <name>CCIncludePath2</name>
+                    <state>$PROJ_DIR$\include</state>
+                    <state>$PROJ_DIR$\..\drivers\inc</state>
+                </option>
+            </data>
+        </settings>
+    </configuration>
+
+    <configuration>
+        <name>Release</name>
+        <settings>
+            <name>ICCARM</name>
+            <data>
+                <option>
+                    <name>CCDefines</name>
+                    <state>NDEBUG</state>
+                </option>
+            </data>
+        </settings>
+    </configuration>
+
+    <file>
+        <name>$PROJ_DIR$\src\main.c</name>
+    </file>
+
+    <group>
+        <name>App</name>
+        <file>
+            <name>$PROJ_DIR$\src\app.c</name>
+        </file>
+        <group>
+            <name>Drivers</name>
+            <file>
+                <name>$PROJ_DIR$\src\drv.c</name>
+            </file>
+        </group>
+    </group>
+</project>
