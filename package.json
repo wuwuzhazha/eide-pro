@@ -212,6 +212,12 @@
                         "markdownDescription": "%settings.mcp.server.port%",
                         "default": 8940
                     },
+                    "EIDE.Tooling.PromptInstall": {
+                        "type": "boolean",
+                        "scope": "window",
+                        "markdownDescription": "%settings.tooling.prompt_install%",
+                        "default": true
+                    },
                     "EIDE.Win32.Msys.Enable": {
                         "type": "boolean",
                         "scope": "resource",

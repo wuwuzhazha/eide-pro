@@ -24,6 +24,7 @@
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as https from 'https';
 import * as os from 'os';
 import * as node7z from 'node-7z';
 import * as NodePath from 'path';
@@ -48,8 +49,15 @@ import {
     view_str$prompt$mcp_reconnected,
     view_str$prompt$mcp_reconnect_failed,
     view_str$prompt$not_found_compiler, view_str$prompt$debugCfgNotSupported, not_support_no_arm_project,
-    view_str$prompt$requireOtherExtension, view_str$add_missed_stubs
+    view_str$prompt$requireOtherExtension, view_str$add_missed_stubs,
+    view_str$prompt$tooling_intro, view_str$prompt$tooling_missing_prereqs,
+    txt_tooling_install, txt_tooling_later, txt_tooling_dont_ask,
+    view_str$prompt$tooling_install_title, view_str$prompt$tooling_step_download,
+    view_str$prompt$tooling_step_install, view_str$prompt$tooling_step_verify,
+    view_str$prompt$tooling_install_done, view_str$prompt$tooling_install_failed,
+    view_str$prompt$tooling_install_manual
 } from './StringTable';
+import { decideInstallPrompt, installHeadlessTooling, releaseTarballUrl, ToolingState } from './mcp/tooling_install';
 import { LogDumper } from './LogDumper';
 import { findDotnetExecutable, findInstalledDotnetRuntime, getDotnetRootDirs } from './DotnetRuntime';
 import { StatusBarManager } from './StatusBarManager';
@@ -66,6 +74,219 @@ const extension_deps: string[] = [];
 
 let projectExplorer: ProjectExplorer;
 let operationExplorer: OperationExplorer;
+
+const TOOLING_PROMPT_DISMISSED_KEY = 'eide.toolingPromptDismissedVersion';
+const toolingProbeTimeoutMs = 5000;
+const toolingVerifyTimeoutMs = 10000;
+const toolingDownloadMaxRedirects = 6;
+
+export interface ToolingPromptDeps {
+    extensionVersion: string;
+    platform: string;
+    promptEnabled: boolean;
+    dismissedVersion: string | undefined;
+    probeCliVersion: () => Promise<string | undefined>;
+    probeNodeVersion: () => Promise<string | undefined>;
+    probeDotnetMajor: () => number | undefined;
+    showInformationMessage: (message: string, ...items: string[]) => Promise<string | undefined>;
+    rememberDismissed: (version: string) => Promise<void>;
+    install: () => Promise<void>;
+}
+
+export function toolingPromptMessage(missingPrereqs: string[]): string {
+    const missing = missingPrereqs.length > 0
+        ? ` ${view_str$prompt$tooling_missing_prereqs}: ${missingPrereqs.join(', ')}.`
+        : '';
+    return `${view_str$prompt$tooling_intro}${missing}`;
+}
+
+export function toolingRepositoryUrl(repositoryUrl: string): string {
+    return repositoryUrl.replace(/\.git$/, '').replace(/\/+$/, '');
+}
+
+export function toolingInstallFailureMessage(
+    message: string,
+    version: string,
+    repositoryUrl: string
+): string {
+    return `${view_str$prompt$tooling_install_failed}\n\n${message}\n\n` +
+        `${view_str$prompt$tooling_install_manual}: npm install -g ${releaseTarballUrl(version, repositoryUrl)}`;
+}
+
+export async function maybePromptToolingInstall(deps: ToolingPromptDeps): Promise<void> {
+    if (!deps.promptEnabled) {
+        return;
+    }
+
+    const state: ToolingState = {
+        cliVersion: await deps.probeCliVersion(),
+        nodeVersion: await deps.probeNodeVersion(),
+        dotnetMajor: deps.probeDotnetMajor(),
+        dismissedVersion: deps.dismissedVersion
+    };
+
+    const decision = decideInstallPrompt(state, deps.extensionVersion, deps.platform);
+    if (decision.action !== 'prompt') {
+        return;
+    }
+
+    const selection = await deps.showInformationMessage(
+        toolingPromptMessage(decision.missingPrereqs),
+        txt_tooling_install, txt_tooling_later, txt_tooling_dont_ask);
+
+    if (selection === txt_tooling_dont_ask) {
+        await deps.rememberDismissed(deps.extensionVersion);
+        return;
+    }
+    if (selection === txt_tooling_install) {
+        await deps.install();
+    }
+}
+
+function execToolingProbe(file: string, args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+        ChildProcess.execFile(file, args,
+            { timeout: toolingProbeTimeoutMs, windowsHide: true, encoding: 'utf8' },
+            (error, stdout) => error ? reject(error) : resolve(stdout));
+    });
+}
+
+async function probeToolingCliVersion(): Promise<string | undefined> {
+    try {
+        const stdout = await execToolingProbe('eide-cli', ['--version']);
+        const match = /(\d+\.\d+\.\d+[^\s]*)/.exec(stdout);
+        return match ? match[1] : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+async function probeToolingNodeVersion(): Promise<string | undefined> {
+    try {
+        return (await execToolingProbe('node', ['--version'])).trim();
+    } catch {
+        return undefined;
+    }
+}
+
+function probeToolingDotnetMajor(): number | undefined {
+    const runtime = findInstalledDotnetRuntime(6);
+    const match = runtime ? /Microsoft\.NETCore\.App (\d+)\./.exec(runtime) : undefined;
+    return match ? Number(match[1]) : undefined;
+}
+
+function downloadToolingPackage(url: string, dest: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const follow = (current: string, redirectsLeft: number) => {
+            if (redirectsLeft <= 0) {
+                reject(new Error(`Too many redirects: ${url}`));
+                return;
+            }
+            https.get(current, { headers: { 'user-agent': 'eide-pro' } }, res => {
+                const status = res.statusCode ?? 0;
+                if (status >= 300 && status < 400 && res.headers.location) {
+                    res.resume();
+                    follow(new URL(res.headers.location, current).toString(), redirectsLeft - 1);
+                    return;
+                }
+                if (status !== 200) {
+                    res.resume();
+                    reject(new Error(`Download failed: HTTP ${status} for ${current}`));
+                    return;
+                }
+                const file = fs.createWriteStream(dest);
+                res.pipe(file);
+                file.once('finish', () => file.close(() => resolve()));
+                file.once('error', reject);
+            }).once('error', reject);
+        };
+        follow(url, toolingDownloadMaxRedirects);
+    });
+}
+
+function runToolingCommand(
+    file: string,
+    args: string[],
+    timeoutMs: number
+): Promise<{ code: number; stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+        ChildProcess.execFile(file, args,
+            { timeout: timeoutMs, windowsHide: true, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+            (error, stdout, stderr) => {
+                if (error) {
+                    if (typeof error.code === 'number') {
+                        resolve({ code: error.code, stdout, stderr });
+                    } else {
+                        reject(error);
+                    }
+                    return;
+                }
+                resolve({ code: 0, stdout, stderr });
+            });
+    });
+}
+
+async function installTooling(
+    context: vscode.ExtensionContext,
+    version: string,
+    repositoryUrl: string
+): Promise<void> {
+    const workDir = context.globalStorageUri.fsPath;
+    fs.mkdirSync(workDir, { recursive: true });
+
+    const result = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: view_str$prompt$tooling_install_title,
+        cancellable: false
+    }, async (progress) => {
+        return installHeadlessTooling({
+            version,
+            repositoryUrl,
+            workDir,
+            download: async (url, dest) => {
+                progress.report({ message: view_str$prompt$tooling_step_download });
+                await downloadToolingPackage(url, dest);
+            },
+            run: async (file, args, timeoutMs) => {
+                progress.report({
+                    message: file === 'eide-cli'
+                        ? view_str$prompt$tooling_step_verify
+                        : view_str$prompt$tooling_step_install
+                });
+                return runToolingCommand(file, args,
+                    file === 'eide-cli' ? Math.min(timeoutMs, toolingVerifyTimeoutMs) : timeoutMs);
+            }
+        });
+    });
+
+    if (result.ok) {
+        await vscode.window.showInformationMessage(view_str$prompt$tooling_install_done);
+    } else {
+        await vscode.window.showErrorMessage(
+            toolingInstallFailureMessage(result.message, version, repositoryUrl));
+    }
+}
+
+function startToolingPrompt(context: vscode.ExtensionContext): void {
+    const packageJSON = context.extension.packageJSON;
+    const version = String(packageJSON.version);
+    const repositoryUrl = toolingRepositoryUrl(String(packageJSON.repository.url));
+
+    maybePromptToolingInstall({
+        extensionVersion: version,
+        platform: process.platform,
+        promptEnabled: vscode.workspace.getConfiguration().get<boolean>('EIDE.Tooling.PromptInstall', true),
+        dismissedVersion: context.globalState.get<string>(TOOLING_PROMPT_DISMISSED_KEY),
+        probeCliVersion: probeToolingCliVersion,
+        probeNodeVersion: probeToolingNodeVersion,
+        probeDotnetMajor: probeToolingDotnetMajor,
+        showInformationMessage: (message, ...items) =>
+            Promise.resolve(vscode.window.showInformationMessage(message, ...items)),
+        rememberDismissed: version =>
+            Promise.resolve(context.globalState.update(TOOLING_PROMPT_DISMISSED_KEY, version)),
+        install: () => installTooling(context, version, repositoryUrl)
+    }).catch(err => GlobalEvent.log_warn(err));
+}
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -321,6 +542,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // launch done
     GlobalEvent.emit('extension_launch_done');
     GlobalEvent.log_info('EIDE Pro launch done');
+
+    startToolingPrompt(context);
 }
 
 // this method is called when your extension is deactivated

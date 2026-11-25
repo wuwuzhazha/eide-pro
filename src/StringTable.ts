@@ -1112,6 +1112,68 @@ export const close_project = [
     'Close Project'
 ][langIndex];
 
+//-------------Tooling install prompt-------------
+
+export const view_str$prompt$tooling_intro = [
+    '`eide-cli` / `eide-mcp` 是给脚本与 AI 用的独立工具包，安装本扩展不包含它。',
+    '`eide-cli` / `eide-mcp` ship as a separate package for scripts and AI agents; installing this extension does not include them.'
+][langIndex];
+
+export const view_str$prompt$tooling_missing_prereqs = [
+    '缺少',
+    'Missing'
+][langIndex];
+
+export const txt_tooling_install = [
+    '安装',
+    'Install'
+][langIndex];
+
+export const txt_tooling_later = [
+    '稍后',
+    'Later'
+][langIndex];
+
+export const txt_tooling_dont_ask = [
+    '不再提示',
+    "Don't ask again"
+][langIndex];
+
+export const view_str$prompt$tooling_install_title = [
+    '安装 eide-cli / eide-mcp',
+    'Installing eide-cli / eide-mcp'
+][langIndex];
+
+export const view_str$prompt$tooling_step_download = [
+    '下载安装包 ...',
+    'Downloading package ...'
+][langIndex];
+
+export const view_str$prompt$tooling_step_install = [
+    '执行 npm install ...',
+    'Running npm install ...'
+][langIndex];
+
+export const view_str$prompt$tooling_step_verify = [
+    '校验 eide-cli ...',
+    'Verifying eide-cli ...'
+][langIndex];
+
+export const view_str$prompt$tooling_install_done = [
+    '已安装，可在终端运行 `eide-cli --version`。',
+    'Installed. Run `eide-cli --version` in a terminal to check it.'
+][langIndex];
+
+export const view_str$prompt$tooling_install_failed = [
+    '安装 eide-cli / eide-mcp 失败。',
+    'Installing eide-cli / eide-mcp failed.'
+][langIndex];
+
+export const view_str$prompt$tooling_install_manual = [
+    '可手动执行',
+    'Run it manually'
+][langIndex];
+
 //-------------MSG Title-------------
 
 export const WARNING = [

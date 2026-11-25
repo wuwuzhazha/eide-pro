@@ -106,6 +106,8 @@
     "settings.mcp.server.enable": "是否启用内置的MCP服务，用于增强AI与EIDE之间的交互。启用后需要重启VSCode以使设置生效",
     "settings.mcp.server.port": "MCP服务的端口号",
 
+    "settings.tooling.prompt_install": "启动时若缺少 `eide-cli` / `eide-mcp` 包，是否提示安装。它们是给脚本与 AI 用的独立工具包，扩展本身不包含。关闭后完全不检测、不提示。",
+
     "settings.msys.enable": "确定是否在Windows平台上启用内置的 **MSYS环境和工具**",
 
     "settings.enable.telemetry": "启用遥测功能。我们将收集日志中的信息，帮助改进该扩展的功能",

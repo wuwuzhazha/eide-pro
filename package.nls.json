@@ -106,6 +106,8 @@
     "settings.mcp.server.enable": "Enable built-in mcp server. Used to enhance the interaction between AI and EIDE. If enabled, you need to restart VSCode for the setting to take effect",
     "settings.mcp.server.port": "The local port number for mcp server",
 
+    "settings.tooling.prompt_install": "Offer to install the `eide-cli` / `eide-mcp` package on startup when it is missing. They ship as a separate package for scripts and AI agents; the extension does not include them. Disable to turn the check off completely.",
+
     "settings.msys.enable": "Determine whether to enable the built-in **MSYS environment and tools** on Win32 platform",
 
     "settings.enable.telemetry": "Enable telemetry for extension. We will collect information from the logs to help improve the functionality of this extension.",
