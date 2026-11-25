@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as yaml from 'yaml';
 
 /** Config version produced by `migrateProjectConfig`. */
@@ -115,5 +116,21 @@ export function migrateProjectConfig(config: any): any {
             target.custom_dep = undefined;
         }
     }
+    return config;
+}
+
+/**
+ * Migrate and persist an old config before the loader reads it again; configs
+ * that need no migration are returned untouched.
+ */
+export function migrateLoadedConfig(config: any, configFile: string): any {
+    if (!needsProjectConfigMigration(config)) {
+        return config;
+    }
+    const sourceVersion = String(config.version);
+    migrateProjectConfig(config);
+    fs.writeFileSync(configFile, dumpProjectConfig(config), 'utf8');
+    process.stderr.write(
+        `migration ${configFile} from ${sourceVersion} to ${config.version}\n`);
     return config;
 }
