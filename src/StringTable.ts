@@ -815,11 +815,6 @@ export const remove_this_item = [
     `Remove this item: '{}' ?`
 ][langIndex];
 
-export const sponsor_author_text = [
-    `赞助作者`,
-    `Sponsor The Author`
-][langIndex];
-
 export const rating_text = [
     'GitHub',
     'GitHub'

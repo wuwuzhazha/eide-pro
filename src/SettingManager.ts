@@ -369,10 +369,6 @@ export class SettingManager {
         return this.getConfiguration().get<boolean>('Win32.Msys.Enable') || false;
     }
 
-    isEnableTelemetry(): boolean {
-        return this.getConfiguration().get<boolean>('Option.EnableTelemetry') || false;
-    }
-
     isShowOutputFilesInExplorer(): boolean {
         return true;
     }

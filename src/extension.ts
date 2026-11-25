@@ -42,7 +42,7 @@ import * as mcp from './MCPServer';
 import {
     ERROR, WARNING, INFORMATION,
     view_str$operation$serialport, view_str$operation$baudrate, view_str$operation$serialport_name,
-    txt_install_now, txt_yes, view_str$prompt$feedback, rating_text, later_text, sponsor_author_text,
+    txt_install_now, txt_yes, view_str$prompt$feedback, rating_text, later_text,
     view_str$prompt$install_dotnet_and_restart_vscode,
     view_str$prompt$install_dotnet_failed,
     view_str$prompt$mcp_server_disabled,
@@ -397,7 +397,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // init eide components
     const done = await InitComponents(context);
     if (!done) {
-        vscode.window.showErrorMessage(`${ERROR} : Install eide binaries failed !, You can download offline [vsix package](https://github.com/github0null/eide/releases) and install it !`);
+        vscode.window.showErrorMessage(`${ERROR} : Install eide binaries failed !, You can download offline [vsix package](https://github.com/wuwuzhazha/eide-pro/releases) and install it !`);
         return;
     }
 
@@ -441,7 +441,7 @@ export async function activate(context: vscode.ExtensionContext) {
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.SetToolchainPath', () => operationExplorer.OnSetToolchainPath()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.SetupUtilTools', () => operationExplorer.setupUtilTools()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.openSettings', () => SettingManager.jumpToSettings(`@ext:${EXTENSION_ID}`)));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.onlineHelp', () => utility.openUrl('https://discuss.em-ide.com')));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.onlineHelp', () => utility.openUrl('https://github.com/wuwuzhazha/eide-pro/issues')));
 
     // operations user cmds
     subscriptions.push(vscode.commands.registerCommand('eide.operation.install_toolchain', () => operationExplorer.OnSetToolchainPath()));
@@ -661,13 +661,9 @@ function postLaunchHook(extensionCtx: vscode.ExtensionContext) {
             Date.now() > appUsrData['InstallTime'] + some_days) {
             resManager.setAppUsrData('Feedbacked', true);
             const msg = view_str$prompt$feedback;
-            vscode.window.showInformationMessage(msg, rating_text, sponsor_author_text).then((ans) => {
+            vscode.window.showInformationMessage(msg, rating_text).then((ans) => {
                 if (ans == rating_text) {
                     utility.openUrl(`https://github.com/wuwuzhazha/eide-pro/issues`);
-                }
-                if (ans == sponsor_author_text) {
-                    // https://em-ide.com/sponsor
-                    utility.openUrl(`https://em-ide.com/sponsor`);
                 }
             });
         }
@@ -1579,16 +1575,6 @@ async function InitComponents(context: vscode.ExtensionContext): Promise<boolean
 
     // check and install .NET6 runtime
     await checkAndInstallRuntime();
-
-    // register telemetry hook if user enabled
-    try {
-        if (settingManager.isEnableTelemetry()) {
-            const TelemetryTask = require('./Private/TelemetryTask');
-            TelemetryTask.registerTelemetryHook();
-        }
-    } catch (error) {
-        // ignore error
-    }
 
     // set some toolpath to env
     exportEnvToSysPath(context);
