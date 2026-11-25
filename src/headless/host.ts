@@ -7,6 +7,7 @@ import {
     HeadlessMemento
 } from './vscode_shim';
 import { findExtensionRoot, loadHeadlessSettings } from './settings';
+import type { HeadlessSettings } from './settings';
 import { ensureBundledToolPermissions } from './tool_permissions';
 import { EXTENSION_ID } from '../ExtensionInfo';
 import { installVscodeShim } from './vscode';
@@ -164,12 +165,61 @@ function ensureSameExtensionRoot(extensionRoot: string): void {
     }
 }
 
+export interface HeadlessRuntimeOptions {
+    resourcesDir: string;
+    extensionRoot: string;
+    workspaceRoot: string;
+    workspaceFile?: string;
+    settings: HeadlessSettings;
+    workspaceState: HeadlessMemento;
+    globalState: HeadlessMemento;
+}
+
+/**
+ * Install the VS Code shim and initialize the extension singletons that the
+ * headless host and the import/creation paths rely on.
+ */
+export function initHeadlessRuntime(options: HeadlessRuntimeOptions): void {
+    installVscodeShim();
+    process.env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
+    process.env['DOTNET_ROLL_FORWARD'] = 'Major';
+
+    configureHeadlessVscode({
+        settings: options.settings.values,
+        workspaceRoot: options.workspaceRoot,
+        workspaceFile: options.workspaceFile,
+        workspaceState: options.workspaceState,
+        globalState: options.globalState,
+        language: options.settings.language
+    });
+
+    const context = {
+        extensionPath: options.extensionRoot,
+        extension: {
+            id: EXTENSION_ID,
+            packageJSON: JSON.parse(
+                fs.readFileSync(NodePath.join(options.extensionRoot, 'package.json'), 'utf8'))
+        },
+        subscriptions: [],
+        workspaceState: options.workspaceState,
+        globalState: options.globalState
+    };
+
+    const platform = require('../Platform') as typeof import('../Platform');
+    const { ResManager } = require('../ResManager') as typeof import('../ResManager');
+    const { SettingManager } = require('../SettingManager') as typeof import('../SettingManager');
+
+    platform.init(context as any);
+    ResManager.GetInstance(context as any);
+    ensureBundledToolPermissions(options.resourcesDir);
+    ensureSameExtensionRoot(options.extensionRoot);
+    SettingManager.GetInstance(context as any);
+}
+
 export async function openHeadlessProject(
     options: HeadlessHostOptions
 ): Promise<HeadlessProjectSession> {
     installVscodeShim();
-    process.env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1';
-    process.env['DOTNET_ROLL_FORWARD'] = 'Major';
 
     const { root, workspaceFile } = resolveWorkspace(options.projectPath, options.workspaceFile);
     const config = readProjectConfig(workspaceFile);
@@ -197,38 +247,18 @@ export async function openHeadlessProject(
     const globalState = new MemoryMemento();
     workspaceState.update(`project.${uid}`, JSON.stringify({ target }));
 
-    configureHeadlessVscode({
-        settings: settings.values,
+    initHeadlessRuntime({
+        resourcesDir: options.resourcesDir,
+        extensionRoot,
         workspaceRoot: root,
         workspaceFile,
-        workspaceState,
-        globalState,
-        language: settings.language
-    });
-
-    const context = {
-        extensionPath: extensionRoot,
-        extension: {
-            id: EXTENSION_ID,
-            packageJSON: JSON.parse(
-                fs.readFileSync(NodePath.join(extensionRoot, 'package.json'), 'utf8'))
-        },
-        subscriptions: [],
+        settings,
         workspaceState,
         globalState
-    };
+    });
 
-    const platform = require('../Platform') as typeof import('../Platform');
-    const { ResManager } = require('../ResManager') as typeof import('../ResManager');
-    const { SettingManager } = require('../SettingManager') as typeof import('../SettingManager');
     const { AbstractProject } = require('../EIDEProject') as typeof import('../EIDEProject');
     const { File } = require('../../lib/node-utility/File') as typeof import('../../lib/node-utility/File');
-
-    platform.init(context as any);
-    ResManager.GetInstance(context as any);
-    ensureBundledToolPermissions(options.resourcesDir);
-    ensureSameExtensionRoot(extensionRoot);
-    SettingManager.GetInstance(context as any);
 
     const project = AbstractProject.NewProject(workspaceState as any);
     try {
