@@ -131,4 +131,43 @@ if (!fs.existsSync(qjsExe)) {
 
     assert(JSON.stringify(prjList[1].defineList) === JSON.stringify(['NDEBUG']),
         'qjs: defines are per target');
+
+    // x2js keepText regression: <excluded><configuration>Release</configuration></excluded>
+    // parses to { __text: 'Release' }, so importers must use toString(), not typeof == 'string'
+    const os = require('os');
+    const exclRoot = NodePath.join(os.tmpdir(), `eide-importer-excl-${process.pid}`);
+    fs.mkdirSync(NodePath.join(exclRoot, 'src'), { recursive: true });
+    const exclFile = NodePath.join(exclRoot, 'excl.ewp');
+    fs.writeFileSync(exclFile, [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<project>',
+        '    <configuration><name>Debug</name>',
+        '        <toolchain><name>ARM</name></toolchain>',
+        '        <settings><name>ICCARM</name><data><option><name>CCDefines</name><state>DBG_ON</state></option></data></settings>',
+        '    </configuration>',
+        '    <configuration><name>Release</name>',
+        '        <toolchain><name>ARM</name></toolchain>',
+        '        <settings><name>ICCARM</name><data><option><name>CCDefines</name><state>NDEBUG</state></option></data></settings>',
+        '    </configuration>',
+        '    <file><name>$PROJ_DIR$\\src\\main.c</name></file>',
+        '    <file><name>$PROJ_DIR$\\src\\dbg.c</name>',
+        '        <excluded><configuration>Release</configuration></excluded>',
+        '    </file>',
+        '</project>'
+    ].join('\r\n'));
+    const exclRun = spawnSync(qjsExe, ['--std', './importer/index.js', 'IAR_For_ARM.ewp', exclFile], {
+        cwd: scriptsDir,
+        encoding: 'utf8'
+    });
+    assert(exclRun.error === undefined, 'qjs: exclusion fixture runs');
+    const exclList: ImportedProject[] = JSON.parse(exclRun.stdout);
+    const exclDebug = exclList.find((p: ImportedProject) => p.target === 'Debug');
+    assert(exclDebug !== undefined && exclDebug.excludeList !== undefined,
+        'qjs: excludeList is populated for the exclusion fixture');
+    assert(exclDebug!.excludeList!['Release'] !== undefined
+        && exclDebug!.excludeList!['Release'].some((p: string) => norm(p).endsWith('/src/dbg.c')),
+        `qjs: dbg.c is excluded in Release (${JSON.stringify(exclDebug!.excludeList)})`);
+    assert(exclDebug!.excludeList!['Debug'] === undefined,
+        `qjs: dbg.c is not excluded in Debug (${JSON.stringify(exclDebug!.excludeList)})`);
+    fs.rmSync(exclRoot, { recursive: true, force: true });
 }

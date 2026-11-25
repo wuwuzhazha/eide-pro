@@ -140,11 +140,10 @@ function parseProject(prjRootPath, PRJ, PRJ_ENV) {
         parent.files.push({ path: absPath });
         if (fileInfo.excluded && fileInfo.excluded.configuration) {
             const exclCfgs = toArray(fileInfo.excluded.configuration);
-            exclCfgs.forEach((target) => {
-                if (typeof target == 'string') {
-                    if (!result.excludeList[target]) result.excludeList[target] = [];
-                    result.excludeList[target].push(absPath);
-                }
+            exclCfgs.forEach((target_) => {
+                const target = target_.toString();
+                if (!result.excludeList[target]) result.excludeList[target] = [];
+                result.excludeList[target].push(absPath);
             });
         }
     };
