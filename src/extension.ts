@@ -70,7 +70,7 @@ import { VirtualDocument } from './VirtualDocsProvider';
 import * as utility from './utility';
 import * as platform from './Platform';
 import { EXTENSION_ID } from './ExtensionInfo';
-import { probeCommand, probeProcessOutput } from './core/command_probe';
+import { commandProbeInvocation, probeCommand, probeProcessOutput } from './core/command_probe';
 
 const extension_deps: string[] = [];
 
@@ -269,8 +269,9 @@ function runToolingCommand(
     args: string[],
     timeoutMs: number
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+    const invocation = commandProbeInvocation(file, args, process.platform);
     return new Promise((resolve, reject) => {
-        ChildProcess.execFile(file, args,
+        ChildProcess.execFile(invocation.file, invocation.args,
             { timeout: timeoutMs, windowsHide: true, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
             (error, stdout, stderr) => {
                 if (error) {
