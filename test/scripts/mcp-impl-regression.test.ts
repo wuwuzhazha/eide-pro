@@ -59,6 +59,46 @@ const eideFile = NodePath.join(projectDir, '.eide', 'eide.yml');
 
 const abs = (rel: string) => NodePath.join(projectDir, rel);
 
+const stubToolchain = NodePath.join(root, 'toolchain');
+const stubGcc = NodePath.join(stubToolchain, 'bin',
+    `arm-none-eabi-gcc${process.platform === 'win32' ? '.exe' : ''}`);
+
+function createStubToolchain(): void {
+    fs.mkdirSync(NodePath.join(stubToolchain, 'bin'), { recursive: true });
+    fs.writeFileSync(stubGcc, '');
+    if (!fs.existsSync(stubGcc)) {
+        throw new Error(`Stub toolchain was not created: ${stubGcc}`);
+    }
+    console.log('OK: stub toolchain created at', stubToolchain);
+}
+
+async function openProject(): Promise<any> {
+    try {
+        return await openHeadlessProject({
+            projectPath: projectDir,
+            resourcesDir,
+            extensionRoot: repoRoot,
+            toolchainPath: stubToolchain
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/Toolchain '.*' is not installed|not configured/i.test(message)) {
+            throw new Error(
+                `openHeadlessProject must receive an explicit toolchainPath (stub: ${stubToolchain}); ` +
+                `the host fell back to discovering the toolchain on this machine: ${message}`);
+        }
+        throw error;
+    }
+}
+
+function checkToolchainInUse(prj: any): void {
+    const { ToolchainManager } = require('../../../src/ToolchainManager');
+    const folder = ToolchainManager.getInstance()
+        .getToolchainExecutableFolder(prj.getToolchain().name);
+    check(folder !== undefined && NodePath.resolve(folder.path) === NodePath.resolve(NodePath.join(stubToolchain, 'bin')),
+        `project resolves the stub toolchain (${folder ? folder.path : 'undefined'})`);
+}
+
 function seedProjectConfig(): void {
     const config = yaml.parse(fs.readFileSync(eideFile, 'utf8'));
     const target = config.targets[config.mode || 'Debug'];
@@ -145,13 +185,15 @@ async function checkBuildPathThreading(uid: string, prj: any): Promise<void> {
 async function run(): Promise<void> {
     fs.cpSync(fixture, projectDir, { recursive: true });
     seedProjectConfig();
+    createStubToolchain();
 
-    const session = await openHeadlessProject({ projectPath: projectDir, resourcesDir, extensionRoot: repoRoot });
+    const session = await openProject();
     try {
         const prj = session.project;
         const uid = prj.getUid();
         const explorer = { getProjectByUid: (id: string) => id === uid ? prj : undefined };
 
+        checkToolchainInUse(prj);
         seedBuildInDep(prj);
         await checkReadWriteSymmetry(prj, uid, explorer);
         checkBuildResultShape(prj);
