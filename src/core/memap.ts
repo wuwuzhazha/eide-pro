@@ -24,13 +24,11 @@
 
 /*
     TypeScript port of the format parsers in the bundled memap (Apache-2.0, ARM).
-    Only the two map formats used by the map view are ported here:
+    Only the three map formats used by the map view are ported here:
 
     - 'gcc'   -> memap `_GccParser`   (GNU ld map, used by GCC / GNU_SDCC_MCS51)
     - 'armcc' -> memap `_ArmccParser` (ARMCC/ARMClang map, used by AC5 / AC6)
-
-    The IAR format needs memap's yaml driven configuration and is intentionally
-    not ported here; IAR_ARM keeps using memap.
+    - 'iar'   -> memap `_IarParser`   (IAR ilinkarm map, used by IAR_ARM)
 
     Parsing behavior (paths, section names, merge rules, `.map.old` deltas) is
     kept numerically identical to `res/data/patches/memap.py`, which is the
@@ -40,7 +38,7 @@
 
 import * as NodePath from 'path';
 
-export type MemapFormat = 'gcc' | 'armcc';
+export type MemapFormat = 'gcc' | 'armcc' | 'iar';
 
 export interface MemapModuleSizes {
     [section: string]: number;
@@ -81,6 +79,10 @@ const RE_GCC_TRANS_FILE = /^(.+\/|.+\.ltrans.o(bj)?)$/;
 
 const RE_ARMCC_ROW = /^\s+0x(\w{8})\s+0x(\w{8})\s+(\w+)\s+(\w+)\s+(\d+)\s+[*]?.+\s+(.+)$/;
 const RE_ARMCC_OBJECT = /^(.+\.(l|lib|ar))\((.+\.o(bj)?)\)/;
+
+const RE_IAR_SECTION = /^\s+(.+)\s+(zero|const|ro code|inited|uninit)\s+0x(['\w]+)\s+0x(\w+)\s+(.+)\s.+$/;
+const RE_IAR_LIBRARY = /^(.+\.a)\:.+$/;
+const RE_IAR_OBJECT_LIBRARY = /^\s+(.+\.o(bj)?)\s.*/;
 
 function parseHex(value: string): number {
     if (!/^[0-9a-f]+$/i.test(value))
@@ -190,6 +192,15 @@ class ModuleStore {
         const sizes: MemapModuleSizes = {};
         sizes[section] = size;
         this.map.set(objectName, sizes);
+    }
+
+    /** memap `_Parser.module_replace`: a missing object is left untouched. */
+    replace(oldName: string, newName: string): void {
+        const sizes = this.map.get(oldName);
+        if (sizes === undefined)
+            return;
+        this.map.set(newName, sizes);
+        this.map.delete(oldName);
     }
 
     entries(): [string, MemapModuleSizes][] {
@@ -336,6 +347,100 @@ export function parseArmccMap(text: string, toolchainRootDir?: string): MemapMod
         name === 'anon$$obj.o' || name === 'anon$$obj.obj' || name.startsWith('[lib]'));
 }
 
+/** memap `_IarParser.parse_object_name`. */
+function parseIarObjectName(objectName: string, cmdModules: Map<string, string>): string {
+    if (!isObjectName(objectName))
+        return '[misc]';
+    return cmdModules.get(objectName) ?? objectName;
+}
+
+/** memap `_IarParser.parse_section`. */
+function parseIarSection(line: string, cmdModules: Map<string, string>): [string, number, string] {
+    const match = RE_IAR_SECTION.exec(line);
+    if (!match)
+        return ['', 0, ''];
+
+    const kind = match[2];
+    let section: string;
+    if (kind === 'ro code')
+        section = '.text';
+    else if (kind === 'const')
+        section = '.rodata';
+    else if (kind === 'inited')
+        section = '.data';
+    else if (match[1].startsWith('HEAP'))
+        section = '.heap';
+    else if (match[1].startsWith('CSTACK'))
+        section = '.stack';
+    else
+        section = '.bss';
+
+    return [parseIarObjectName(match[5], cmdModules), parseHex(match[4]), section];
+}
+
+/**
+ * memap `_IarParser.parse_command_line`: the linker arguments before the
+ * first `*` banner. Keys are object basenames, values are the object paths
+ * relative to their character-wise common directory.
+ */
+function parseIarCommandLine(lines: string[], toolchainRootDir: string | undefined): {
+    modules: Map<string, string>,
+    nextIndex: number,
+} {
+    const modules = new Map<string, string>();
+
+    let idx = 0;
+    for (; idx < lines.length; idx++) {
+        const line = lines[idx];
+        if (line.startsWith('*'))
+            break;
+        for (let arg of line.split(' ')) {
+            arg = arg.replace(/[ \n]+$/, '');
+            if (!arg.startsWith('-') && isObjectName(arg))
+                modules.set(NodePath.basename(arg), arg);
+        }
+    }
+
+    const root = memapDirname(commonStringPrefix(Array.from(modules.values())));
+    const relative = new Map<string, string>();
+    for (const [name, path] of modules)
+        relative.set(name, toRelativePath(path, root, toolchainRootDir));
+
+    return { modules: relative, nextIndex: idx };
+}
+
+/** memap `_IarParser.parse_mapfile`. */
+export function parseIarMap(text: string, toolchainRootDir?: string): MemapModules {
+    const lines = text.split(/\r\n|\n/);
+    const store = new ModuleStore();
+    const commandLine = parseIarCommandLine(lines, toolchainRootDir);
+
+    let idx = commandLine.nextIndex;
+    while (idx < lines.length && !lines[idx].startsWith('  Section  '))
+        idx++;
+    for (idx = idx + 1; idx < lines.length; idx++) {
+        store.add(...parseIarSection(lines[idx], commandLine.modules));
+        if (lines[idx].startsWith('*** MODULE SUMMARY'))
+            break;
+    }
+
+    let currentLibrary = '';
+    for (idx = idx + 1; idx < lines.length; idx++) {
+        const line = lines[idx];
+        const libraryMatch = RE_IAR_LIBRARY.exec(line);
+        if (libraryMatch)
+            currentLibrary = libraryMatch[1];
+        const objectMatch = RE_IAR_OBJECT_LIBRARY.exec(line);
+        if (objectMatch && currentLibrary !== '')
+            store.replace(objectMatch[1], NodePath.join('[lib]', currentLibrary, objectMatch[1]));
+    }
+
+    const modules: MemapModules = {};
+    for (const [name, sizes] of store.entries())
+        modules[name] = sizes;
+    return modules;
+}
+
 export function parseMemapModules(text: string, format: MemapFormat,
     toolchainRootDir?: string): MemapModules {
     switch (format) {
@@ -343,6 +448,8 @@ export function parseMemapModules(text: string, format: MemapFormat,
             return parseGccMap(text, toolchainRootDir);
         case 'armcc':
             return parseArmccMap(text, toolchainRootDir);
+        case 'iar':
+            return parseIarMap(text, toolchainRootDir);
     }
     throw new Error(`Unsupported memap format: ${format}`);
 }

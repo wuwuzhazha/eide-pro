@@ -15,6 +15,7 @@ All notable version changes will be recorded in this file.
   - MCP servers now negotiate the latest protocol and expose the same tool set over HTTP and stdio; `eide_get_environment` reports resolved tool paths with their `source` and searched locations.
   - `eide_get_builder_opts_schema` accepts a dot-separated `path` and returns either compact top-level keys or the requested subtree.
   - Map view for GCC, AC5, AC6 and SDCC-MCS51 now parses maps with the built-in parser, so it no longer needs the bundled python36 runtime.
+  - Map view for IAR_ARM now parses ilinkarm maps with the built-in parser as well; every map view toolchain is python36-free.
 
 **Fixes**:
   - Headless builds now give each build a unique `buildId` and `configHash`, return no `artifacts` on failure, report `failureKind`, and kill the whole process tree on timeout.

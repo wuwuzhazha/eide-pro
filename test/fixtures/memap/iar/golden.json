@@ -1,0 +1,83 @@
+{
+  "format": "iar",
+  "memSummary": {
+    "static_ram": 432,
+    "static_ram_delta": 24,
+    "total_flash": 430,
+    "total_flash_delta": 14
+  },
+  "modules": {
+    "[lib]/d16M_tlf.a/__main.o": {
+      ".text": 8
+    },
+    "data/data.o": {
+      ".bss": 408,
+      ".data": 24
+    },
+    "irqs/irqs.o": {
+      ".text": 152
+    },
+    "main.o": {
+      ".text": 54
+    },
+    "startup/startup.o": {
+      ".text": 192
+    }
+  },
+  "oldModules": {
+    "[lib]/d16M_tlf.a/__main.o": {
+      ".text": 4
+    },
+    "data/data.o": {
+      ".bss": 384,
+      ".data": 24
+    },
+    "irqs/irqs.o": {
+      ".text": 152
+    },
+    "main.o": {
+      ".text": 48
+    },
+    "startup/startup.o": {
+      ".text": 188
+    }
+  },
+  "shortModules": {
+    "[lib]/d16M_tlf.a/__main.o": {
+      ".text": 8,
+      ".text-delta": 4
+    },
+    "data/data.o": {
+      ".bss": 408,
+      ".bss-delta": 24,
+      ".data": 24,
+      ".data-delta": 0
+    },
+    "irqs/irqs.o": {
+      ".text": 152,
+      ".text-delta": 0
+    },
+    "main.o": {
+      ".text": 54,
+      ".text-delta": 6
+    },
+    "startup/startup.o": {
+      ".text": 192,
+      ".text-delta": 4
+    }
+  },
+  "subtotal": {
+    ".bss": 408,
+    ".bss-delta": 24,
+    ".data": 24,
+    ".data-delta": 0,
+    ".heap": 0,
+    ".heap-delta": 0,
+    ".rodata": 0,
+    ".rodata-delta": 0,
+    ".stack": 0,
+    ".stack-delta": 0,
+    ".text": 406,
+    ".text-delta": 14
+  }
+}

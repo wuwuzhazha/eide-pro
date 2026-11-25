@@ -2739,6 +2739,10 @@ class IARARM implements IToolchian {
         ];
     }
 
+    parseMapFile(mapPath: string, treeDepth?: number): string[] | Error {
+        return parseMemapFile(mapPath, 'iar', treeDepth);
+    }
+
     getDefaultConfig(): BuilderOptions {
         return <BuilderOptions>{
             version: this.version,

@@ -7,6 +7,11 @@
  *
  *   PYTHONPATH=<pkg> python36 -m memap -t GCC_ARM   -d 100 golden.map
  *   PYTHONPATH=<pkg> python36 -m memap -t ARM_MICRO -d 100 golden.map
+ *   PYTHONPATH=<pkg> python36 -m memap -t IAR       -d 100 golden.map
+ *
+ * The IAR map is the real ilinkarm output from mbed-os
+ * tools/test/memap/iar.map (it carries the linker command line); its
+ * golden.map.old only shrinks a few sizes to exercise the deltas.
  *
  * Module names are normalized to '/' so the same fixture works on Windows and
  * POSIX; every per-object per-section size and `.map.old` delta must match.
@@ -133,7 +138,7 @@ function checkTable(format: MemapFormat, golden: GoldenFixture,
         `${format}: total flash = ${golden.memSummary['total_flash']}(${formatSigned(golden.memSummary['total_flash_delta'])})`);
 }
 
-for (const format of ['gcc', 'armcc'] as MemapFormat[]) {
+for (const format of ['gcc', 'armcc', 'iar'] as MemapFormat[]) {
     const fixture = loadFixture(format);
     const modules = parseMemapModules(fixture.mapText, format);
     const oldModules = parseMemapModules(fixture.oldMapText, format);
@@ -221,6 +226,7 @@ initMapViewRuntime();
 for (const [toolchainName, format] of [
     ['GCC', 'gcc'],
     ['AC5', 'armcc'],
+    ['IAR_ARM', 'iar'],
 ] as [string, MemapFormat][]) {
     const toolchain = loadToolchain(toolchainName);
     assert(toolchain !== undefined && typeof toolchain.parseMapFile === 'function',
@@ -242,8 +248,10 @@ for (const [toolchainName, format] of [
 
     const libLeaf = format === 'gcc'
         ? NodePath.join('[lib]', 'golden.a', 'lib.o')
-        : NodePath.join('[lib]', 'c_p.l', '__main.o');
-    const libDir = NodePath.join('[lib]', format === 'gcc' ? 'golden.a' : 'c_p.l');
+        : format === 'armcc'
+            ? NodePath.join('[lib]', 'c_p.l', '__main.o')
+            : NodePath.join('[lib]', 'd16M_tlf.a', '__main.o');
+    const libDir = NodePath.dirname(libLeaf);
 
     assert(fullNames.includes(libLeaf) && !fullNames.includes(libDir),
         `${toolchainName}: depth=100 keeps the full library path '${libLeaf}'`);
@@ -259,21 +267,29 @@ for (const [toolchainName, format] of [
     assert(shallowRam === fullRam && shallowFlash === fullFlash,
         `${toolchainName}: depth leaves the RAM/Flash totals unchanged`);
 
+    const headerLine = full.find((line) => /^\|\s+Module\s+/.test(line));
+    assert(headerLine !== undefined, `${toolchainName}: builtin output has the | Module header row`);
+    if (headerLine !== undefined) {
+        const columns = headerLine.split('|')
+            .map((cell) => cell.trim())
+            .filter((cell) => cell !== '')
+            .slice(1);
+        assert(stable(columns) === stable(['.text', '.data', '.bss', '.rodata']),
+            `${toolchainName}: header columns match res/html/map_report`);
+    }
+
     if (format === 'gcc') {
-        const headerLine = full.find((line) => /^\|\s+Module\s+/.test(line));
-        assert(headerLine !== undefined, 'GCC: builtin output has the | Module header row');
-        if (headerLine !== undefined) {
-            const columns = headerLine.split('|')
-                .map((cell) => cell.trim())
-                .filter((cell) => cell !== '')
-                .slice(1);
-            assert(stable(columns) === stable(['.text', '.data', '.bss', '.rodata']),
-                'GCC: header columns match res/html/map_report');
-        }
         assert(fullRam === 'Total Static RAM memory (data + bss): 86(+0) bytes',
             'GCC: RAM total line matches res/html/map_report');
         assert(fullFlash === 'Total Flash memory (text + data + rodata): 264(+16) bytes',
             'GCC: Flash total line matches res/html/map_report');
+    } else if (format === 'iar') {
+        // memap `SECTIONS` also sums `.heap`/`.stack` into the subtotals, but
+        // `static_ram` stays data + bss (the real map has no heap/stack rows).
+        assert(fullRam === 'Total Static RAM memory (data + bss): 432(+24) bytes',
+            'IAR_ARM: RAM total line matches memap');
+        assert(fullFlash === 'Total Flash memory (text + data + rodata): 430(+14) bytes',
+            'IAR_ARM: Flash total line matches memap');
     }
 }
 
