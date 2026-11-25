@@ -375,7 +375,7 @@ async function testThreadsFramesAndVariables(): Promise<void> {
     const variables = await harness.session.listVariables();
     assertEqual(
         harness.fake.written[6],
-        '7-stack-list-variables --all-values\n',
+        '7-stack-list-variables 1\n',
         'variable list command',
     );
     assertEqual(variables.length, 3, 'variable count');
@@ -386,7 +386,7 @@ async function testThreadsFramesAndVariables(): Promise<void> {
     const scoped = await harness.session.listVariables({ threadId: 2, frameLevel: 1 });
     assertEqual(
         harness.fake.written[7],
-        '8-stack-list-variables --all-values --thread 2 --frame 1\n',
+        '8-stack-list-variables --thread 2 --frame 1 1\n',
         'scoped variable list command',
     );
     assertEqual(scoped.length, 3, 'scoped variable count');

@@ -796,13 +796,14 @@ export class MiSession {
             && (!Number.isSafeInteger(options.frameLevel) || options.frameLevel < 0)) {
             throw new MiError('state', 'variable frame level must be a non-negative integer');
         }
-        let command = '-stack-list-variables --all-values';
+        let command = '-stack-list-variables';
         if (options.threadId !== undefined) {
             command += ` --thread ${options.threadId}`;
         }
         if (options.frameLevel !== undefined) {
             command += ` --frame ${options.frameLevel}`;
         }
+        command += ' 1';
         const record = await this.runCommand(command, ['done']);
         const variablesRaw = record.results.variables;
         if (!Array.isArray(variablesRaw)) {
