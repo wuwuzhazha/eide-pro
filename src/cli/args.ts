@@ -33,6 +33,7 @@ export interface CreateCliOptions {
 
 export type ParsedCli =
     | { kind: 'help' }
+    | { kind: 'version' }
     | { kind: 'run'; options: CliOptions }
     | { kind: 'create'; options: CreateCliOptions };
 
@@ -77,6 +78,7 @@ export const cliHelp = [
     '      --template <name>        Built-in template name (see docs/headless.md)',
     '      --output <dir>           Parent directory for the new project (default: .)',
     '      --project-name <name>    Display name (default: --name)',
+    '  -v, --version                Print the CLI version',
     '  -h, --help                   Show this help'
 ].join('\n');
 
@@ -149,6 +151,9 @@ export function parseCliArgs(argv: string[]): ParsedCli {
     if (argv.length === 0) {
         throw new CliUsageError('Missing command.');
     }
+    if (argv.includes('-v') || argv.includes('--version')) {
+        return { kind: 'version' };
+    }
     if (argv[0] === '-h' || argv[0] === '--help') {
         return { kind: 'help' };
     }
@@ -184,6 +189,9 @@ export function parseCliArgs(argv: string[]): ParsedCli {
             case '-h':
             case '--help':
                 return { kind: 'help' };
+            case '-v':
+            case '--version':
+                return { kind: 'version' };
             case '-p':
             case '--project':
                 projectPath = readValue(argv, i, arg);

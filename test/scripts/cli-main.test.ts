@@ -19,6 +19,7 @@ function write(path: string, content = ''): void {
 
 const root = NodePath.join(os.tmpdir(), `eide-cli-main-${process.pid}-${Date.now()}`);
 const exe = process.platform === 'win32' ? '.exe' : '';
+const packageJsonPath = NodePath.join(process.cwd(), 'package.json');
 
 function io(): any {
     const out: string[] = [];
@@ -107,6 +108,26 @@ async function run(): Promise<void> {
     let text = io();
     let code = await main(['--help'], text);
     assert(code === 0 && text.out().includes('Usage:'), 'cli: help');
+    assert(text.out().includes('-v, --version'), 'cli: help documents version');
+
+    text = io();
+    code = await main(['--version'], text, packageJsonPath);
+    const expectedVersion = require(packageJsonPath).version;
+    assert(
+        code === 0
+            && text.out() === `${expectedVersion}\n`
+            && /^\d+\.\d+\.\d+\n$/.test(text.out())
+            && !text.out().includes('{'),
+        'cli: --version prints one plain version line'
+    );
+
+    text = io();
+    code = await main(['-v'], text, packageJsonPath);
+    assert(code === 0 && text.out() === `${expectedVersion}\n`, 'cli: -v prints the same version');
+
+    text = io();
+    code = await main(['build', '--version'], text, packageJsonPath);
+    assert(code === 0 && text.out() === `${expectedVersion}\n`, 'cli: --version overrides other arguments');
 
     text = io();
     code = await main(['bogus'], text);

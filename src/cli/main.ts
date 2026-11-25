@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import * as fs from 'fs';
+import * as NodePath from 'path';
 import { classifyError, createCommandKernel, ErrorKind } from '../core/command_kernel';
 import { EideBuildService } from '../headless/build_service';
 import { StderrLogger } from '../core/logger';
@@ -66,12 +68,21 @@ function exitCodeFor(result: { success: boolean; error?: { kind: ErrorKind } }):
     return 2;
 }
 
-export async function main(argv: string[], io: CliIo = processIo): Promise<number> {
+export function cliVersion(packageJsonPath: string = NodePath.join(__dirname, '..', 'package.json')): string {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as { version: string };
+    return packageJson.version;
+}
+
+export async function main(argv: string[], io: CliIo = processIo, packageJsonPath?: string): Promise<number> {
     let command = '';
     try {
         const parsed = parseCliArgs(argv);
         if (parsed.kind === 'help') {
             io.stdout(cliHelp + '\n');
+            return 0;
+        }
+        if (parsed.kind === 'version') {
+            io.stdout(cliVersion(packageJsonPath) + '\n');
             return 0;
         }
         if (parsed.kind === 'create') {

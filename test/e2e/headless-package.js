@@ -87,6 +87,12 @@ async function main() {
 
         const help = runNode([cli, '--help'], workspace);
         assert(help.status === 0 && help.stdout.includes('Usage:'), 'installed eide-cli starts');
+        assert(help.stdout.includes('-v, --version'), 'installed eide-cli documents --version');
+
+        const installedVersion = runNode([cli, '--version'], workspace);
+        assert(installedVersion.status === 0, `installed eide-cli reports a version\n${installedVersion.stderr}`);
+        assert(installedVersion.stdout === `${packageJson.version}\n`,
+            `installed eide-cli version matches package.json (${installedVersion.stdout.trim()})`);
 
         const project = path.join(workspace, 'project');
         fs.cpSync(path.join(__dirname, 'fixtures', 'cortex-m3'), project, { recursive: true });
