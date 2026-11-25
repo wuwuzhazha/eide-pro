@@ -73,10 +73,25 @@ Expected frontmatter:
 ```yaml
 ---
 name: eide-mcp-tools
+version: 4.3.0
 description: >-
   Operate EIDE Pro embedded MCU projects through MCP tools...
 ---
 ```
+
+## Keep it current
+
+A copied skill goes stale silently: after upgrading EIDE Pro the installed copy
+still describes the previous tool surface. The frontmatter `version` is the
+release the skill describes — compare it with `eide-mcp --version` (or the
+extension version) and refresh when they differ:
+
+```bash
+eide-mcp --print-skill > ~/.agents/skills/eide-mcp-tools/SKILL.md
+```
+
+Point the redirect at whichever path you installed to (`.claude`, `.agents`,
+project scope).
 
 The skill is documentation for agents. It is not required for EIDE Pro itself
 and is not bundled into the VSIX.

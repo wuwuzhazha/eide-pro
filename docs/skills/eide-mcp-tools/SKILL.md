@@ -1,5 +1,6 @@
 ---
 name: eide-mcp-tools
+version: 4.3.0
 description: >-
   Operate EIDE Pro embedded MCU projects through MCP tools: build, rebuild,
   clean, flash, project configuration, stack usage, callgraph, and GDB
@@ -9,6 +10,11 @@ description: >-
 ---
 
 # EIDE Pro MCP Tools
+
+The `version` in the frontmatter is the EIDE Pro release this skill describes.
+Compare it with `eide-mcp --version` (or the extension version in VS Code): if
+they differ, the copy you are reading is stale — refresh it with
+`eide-mcp --print-skill > <path-to-this-file>`.
 
 Prefer the EIDE MCP tools over shell commands or direct `.eide/eide.yml` edits.
 The tools preserve EIDE invariants such as target-level config, dependency
