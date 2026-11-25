@@ -149,6 +149,12 @@ jobs:
       - name: Run QEMU GDB/MI session test
         timeout-minutes: 10
         shell: bash
+        env:
+          ARM_GDB: gdb-multiarch
+          QEMU_SYSTEM_ARM: qemu-system-arm
+          EIDE_REQUIRE_QEMU_DEBUG: '1'
         run: |
+          set -euo pipefail
           npx tsc -p test
-          node out/tmp/test/scripts/debug-qemu-session.test.js
+          node out/tmp/test/scripts/debug-qemu-session.test.js | tee "$RUNNER_TEMP/qemu-debug.log"
+          grep -q 'QEMU DEBUG SESSION RAN' "$RUNNER_TEMP/qemu-debug.log"

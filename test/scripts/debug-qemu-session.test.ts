@@ -6,9 +6,17 @@ const { spawn, spawnSync } = require('child_process');
 const yaml = require('yaml');
 const { createHeadlessToolExecutor } = require('../../../src/mcp/headless_tools') as any;
 
-const QEMU_MACHINE = 'mps2-an385';
-const QEMU_CPU = 'cortex-m3';
+const QEMU_MACHINE = 'netduinoplus2';
 const QEMU_ARGS = ['-nographic', '-monitor', 'none', '-serial', 'none'];
+
+function skipped(reason: string): never {
+    if (process.env.EIDE_REQUIRE_QEMU_DEBUG === '1') {
+        console.error(`FAIL: required QEMU debug test cannot run: ${reason}`);
+        process.exit(1);
+    }
+    console.log(`SKIPPED: ${reason}`);
+    process.exit(0);
+}
 
 function assert(condition: boolean, message: string): void {
     if (!condition) {
@@ -85,12 +93,10 @@ async function run(): Promise<void> {
     const qemu = process.env.QEMU_SYSTEM_ARM || 'qemu-system-arm';
     const gdb = process.env.ARM_GDB || 'arm-none-eabi-gdb';
     if (!commandExists(qemu)) {
-        console.log(`SKIPPED: ${qemu} not found; install QEMU to run the real GDB/MI session.`);
-        return;
+        skipped(`${qemu} not found; install QEMU to run the real GDB/MI session.`);
     }
     if (!commandExists(gdb)) {
-        console.log(`SKIPPED: ${gdb} not found; install ARM GDB to run the real GDB/MI session.`);
-        return;
+        skipped(`${gdb} not found; install ARM GDB to run the real GDB/MI session.`);
     }
 
     const root = fs.mkdtempSync(NodePath.join(os.tmpdir(), 'eide-debug-qemu-'));
@@ -100,8 +106,7 @@ async function run(): Promise<void> {
         ? 'arm-none-eabi-gcc.exe' : 'arm-none-eabi-gcc');
     if (!fs.existsSync(gcc)) {
         fs.rmSync(root, { recursive: true, force: true });
-        console.log(`SKIPPED: ARM GCC not found at ${gcc}.`);
-        return;
+        skipped(`ARM GCC not found at ${gcc}.`);
     }
 
     const fixture = NodePath.join(__dirname, '..', 'e2e', 'fixtures', 'cortex-m3');
@@ -126,7 +131,6 @@ async function run(): Promise<void> {
         const target = `127.0.0.1:${port}`;
         qemuProcess = spawn(qemu, [
             '-M', QEMU_MACHINE,
-            '-cpu', QEMU_CPU,
             '-kernel', elf,
             '-gdb', `tcp:${target}`,
             ...QEMU_ARGS
@@ -160,9 +164,15 @@ async function run(): Promise<void> {
         const stopped = parse(await call('eide_debug_continue', { stopTimeoutMs: 10000 }));
         assert(stopped.class === 'stopped' && stopped.results.reason === 'breakpoint-hit',
             'qemu: continue stops at breakpoint');
+        const stoppedFrame = stopped.results.frame;
+        assert(stoppedFrame !== null && typeof stoppedFrame === 'object'
+            && typeof (stoppedFrame as Record<string, unknown>).func === 'string'
+            && String((stoppedFrame as Record<string, unknown>).func).includes('main'),
+        'qemu: stop frame function contains main');
 
         const frames = parse(await call('eide_debug_backtrace', { maxDepth: 5 }));
-        assert(Array.isArray(frames) && frames.some((frame: any) => frame.functionName === 'main'),
+        assert(Array.isArray(frames) && frames.some((frame: any) =>
+            typeof frame.functionName === 'string' && frame.functionName.includes('main')),
             'qemu: backtrace contains main');
 
         const variableResult = await call('eide_debug_list_variables', { frameLevel: 0 });
@@ -181,9 +191,12 @@ async function run(): Promise<void> {
         assert(faultResult.isError !== true && Array.isArray(fault.reasons)
             && fault.reasons.length === 0,
             'qemu: fault decoder reports no active fault');
+        assert(fault.memManageAddressValid === false && fault.busFaultAddressValid === false,
+            'qemu: fault decoder reports no valid fault addresses');
 
         result = await call('eide_debug_disconnect');
         assert(result.isError !== true && parse(result).success === true, 'qemu: debug disconnect');
+        console.log('QEMU DEBUG SESSION RAN');
         console.log('All QEMU GDB/MI session tests passed.');
     } finally {
         await stopProcess(qemuProcess);
