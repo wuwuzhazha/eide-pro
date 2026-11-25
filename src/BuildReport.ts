@@ -8,7 +8,7 @@ export interface MemoryRegionUsage {
     percent: number;
 }
 
-export type BuildStage = 'compile' | 'link';
+export type BuildStage = 'builder' | 'compile' | 'link';
 
 export interface DiagnosticLike {
     range: { start: { line: number; character: number } };
@@ -102,6 +102,9 @@ function sectionBody(logText: string, marker: string): string {
 export function detectBuildStage(logText: string, success: boolean): BuildStage {
     if (success) {
         return 'link';
+    }
+    if (!logText.includes('>>>')) {
+        return 'builder';
     }
     return sectionBody(logText, '>>> ld').length > 0 ? 'link' : 'compile';
 }

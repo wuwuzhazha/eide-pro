@@ -50,6 +50,10 @@ assert(detectBuildStage('>>> cc\n>>> ld\n', false) === 'compile',
     'stage: empty link section stays at compile');
 assert(detectBuildStage('>>> cc\n>>> ld\n\n>>> postbuild', false) === 'compile',
     'stage: postbuild marker does not look like linker output');
+assert(detectBuildStage('', false) === 'builder',
+    'stage: missing builder log is reported as builder');
+assert(detectBuildStage('Error: builder does not support this option', false) === 'builder',
+    'stage: builder failure before any section is reported as builder');
 
 const problems = toBuildProblems({
     'C:/demo/src/main.c': [

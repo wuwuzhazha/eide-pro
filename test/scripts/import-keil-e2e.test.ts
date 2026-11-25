@@ -32,6 +32,26 @@ function skip(msg: string): void {
     console.log('SKIPPED:', msg);
 }
 
+interface BuildFailureInfo {
+    stage: string;
+    failureKind?: 'timeout' | 'signal' | 'build';
+    analysisError?: string;
+    logTail?: string;
+}
+
+function buildDiagnostics(result: BuildFailureInfo): string {
+    const tail = typeof result.logTail === 'string' && result.logTail.length > 0
+        ? result.logTail.split(/\r\n|\n/).slice(-40).join('\n')
+        : '(no build log)';
+    return [
+        `stage: ${result.stage}`,
+        `failureKind: ${result.failureKind ?? 'none'}`,
+        `analysisError: ${result.analysisError ?? 'none'}`,
+        'logTail:',
+        tail
+    ].join('\n');
+}
+
 function memento(): any {
     return {
         get: () => undefined,
@@ -227,16 +247,19 @@ async function run(): Promise<void> {
             timeoutMs: 180000
         });
         const result = await buildService.build({ projectPath: projectDir, mode: 'rebuild' });
+        const diagnostics = buildDiagnostics(result);
         assert(result.success === true,
-            `build: real ARM GCC build succeeds (stage: ${result.stage})`);
+            `build: real ARM GCC build succeeds\n${diagnostics}`);
         const elfFile = NodePath.join(result.effectiveConfig.outDir, 'demo.elf');
         assert(fs.existsSync(elfFile) && fs.statSync(elfFile).size > 0,
-            `build: produces demo.elf (${elfFile})`);
-        const magic = fs.readFileSync(elfFile).subarray(0, 4).toString('latin1');
+            `build: produces demo.elf (${elfFile})\n${diagnostics}`);
+        const magic = fs.existsSync(elfFile)
+            ? fs.readFileSync(elfFile).subarray(0, 4).toString('latin1')
+            : '';
         assert(magic === '\x7fELF',
-            `build: demo.elf is an ELF image (magic: ${Buffer.from(magic, 'latin1').toString('hex')})`);
+            `build: demo.elf is an ELF image (magic: ${Buffer.from(magic, 'latin1').toString('hex')})\n${diagnostics}`);
         assert(result.artifacts.some((file: string) => file.endsWith('.hex')),
-            `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})`);
+            `build: produces the hex image (${result.artifacts.map((file: string) => NodePath.basename(file)).join(', ')})\n${diagnostics}`);
     }
 
     // regression: the uid gate must still reject an uninitialized project
