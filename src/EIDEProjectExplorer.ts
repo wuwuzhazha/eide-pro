@@ -195,6 +195,24 @@ export async function importKeilProject(option: ImportOptions): Promise<void> {
     await ProjectDataProvider.importKeilProject(option);
 }
 
+/**
+ * Import an IAR workbench into new EIDE project folders.
+ * The import body is independent of the project tree, so the headless host
+ * and the tests drive it directly instead of constructing a data provider.
+ */
+export async function importIarProject(option: ImportOptions): Promise<File> {
+    return ProjectDataProvider.importIarProject(option);
+}
+
+/**
+ * Import an Eclipse project into a new EIDE project folder.
+ * The import body is independent of the project tree, so the headless host
+ * and the tests drive it directly instead of constructing a data provider.
+ */
+export async function importEclipseProject(option: ImportOptions): Promise<File> {
+    return ProjectDataProvider.importEclipseProject(option);
+}
+
 enum TreeItemType {
     SOLUTION,
     PROJECT,
@@ -1968,6 +1986,18 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
             }
         }
 
+        const workspaceFile = await ProjectDataProvider.importIarProject(option);
+
+        // switch project
+        const selection = await vscode.window.showInformationMessage(
+            view_str$operation$import_done, continue_text, cancel_text);
+        if (selection === continue_text) {
+            WorkspaceManager.getInstance().openWorkspace(workspaceFile);
+        }
+    }
+
+    static async importIarProject(option: ImportOptions): Promise<File> {
+
         const ewwInfo = await iarParser.parseIarWorkbench(
             new File(option.projectFile.path), SettingManager.GetInstance().getIarForArmDir());
         const ewwRoot = new File(option.projectFile.dir);
@@ -2230,17 +2260,24 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         // store vscode workspace
         fs.writeFileSync(vscWorkspaceFile.path, JSON.stringify(vscWorkspace, undefined, 4));
 
+        return vscWorkspace.folders.length > 1
+            ? vscWorkspaceFile
+            : project0workspacefile;
+    }
+
+    private async ImportEclipseProject(option: ImportOptions) {
+
+        const workspaceFile = await ProjectDataProvider.importEclipseProject(option);
+
         // switch project
         const selection = await vscode.window.showInformationMessage(
             view_str$operation$import_done, continue_text, cancel_text);
         if (selection === continue_text) {
-            WorkspaceManager.getInstance().openWorkspace(vscWorkspace.folders.length > 1
-                ? vscWorkspaceFile
-                : project0workspacefile);
+            WorkspaceManager.getInstance().openWorkspace(workspaceFile);
         }
     }
 
-    private async ImportEclipseProject(option: ImportOptions) {
+    static async importEclipseProject(option: ImportOptions): Promise<File> {
 
         const ePrjInfo = await eclipseParser.parseEclipseProject(option.projectFile.path);
         const ePrjRoot = new File(option.projectFile.dir);
@@ -2494,12 +2531,7 @@ class ProjectDataProvider implements vscode.TreeDataProvider<ProjTreeItem>, vsco
         const optFile = File.fromArray([basePrj.rootFolder.path, AbstractProject.EIDE_DIR, `files.options.yml`]);
         optFile.Write(view_str$prompt$filesOptionsComment + yaml.stringify(srcOptsObj, { indent: 4, lineWidth: 1000 }));
 
-        // switch project
-        const selection = await vscode.window.showInformationMessage(
-            view_str$operation$import_done, continue_text, cancel_text);
-        if (selection === continue_text) {
-            WorkspaceManager.getInstance().openWorkspace(basePrj.workspaceFile);
-        }
+        return basePrj.workspaceFile;
     }
 
     static async importKeilProject(option: ImportOptions) {
