@@ -567,6 +567,26 @@ async function testContinueIgnoresStaleStop(): Promise<void> {
     await harness.session.disconnect();
 }
 
+async function testInterruptIgnoresStaleStop(): Promise<void> {
+    const harness = createHarness((command, token) => {
+        if (command === '-exec-continue') {
+            return `${token}^running\n`;
+        }
+        if (command === '-exec-interrupt') {
+            return `${token}^done\n*stopped,reason="signal-received",signal-name="SIGINT",frame={level="0",addr="0x08000020",func="main"},thread-id="1"\n`;
+        }
+        return standardResponse(command, token);
+    });
+    await harness.session.connect('localhost:3333');
+    await harness.session.continue();
+    harness.fake.emitStdout('*stopped,reason="breakpoint-hit",frame={level="0",addr="0x08000010",func="main"},thread-id="1"\n');
+    await harness.session.interrupt();
+    const stop = await harness.session.waitForStop(100);
+    assertEqual(stop.results.reason, 'signal-received', 'interrupt ignores a stop queued before it');
+    assertEqual(stop.results['signal-name'], 'SIGINT', 'interrupt returns its own stop');
+    await harness.session.disconnect();
+}
+
 async function testCommandFailureModes(): Promise<void> {
     const exitDuringCommand = createHarness((command, token, fake) => {
         if (command.startsWith('-data-evaluate-expression ')) {
@@ -789,6 +809,7 @@ async function run(): Promise<void> {
     await testStepping();
     await testStopsAndInterrupt();
     await testContinueIgnoresStaleStop();
+    await testInterruptIgnoresStaleStop();
     await testCommandFailureModes();
     console.log('debug-mi-session tests passed');
 }

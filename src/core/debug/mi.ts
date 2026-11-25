@@ -879,6 +879,7 @@ export class MiSession {
     }
 
     async interrupt(): Promise<void> {
+        this.resumeMinSequence = this.stopSequence + 1;
         await this.runCommand('-exec-interrupt', ['done']);
     }
 
