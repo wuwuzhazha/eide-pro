@@ -1016,6 +1016,13 @@ export class MiSession {
         for (const name of ['pc', 'msp', 'lr'] as const) {
             try {
                 await this.evaluate(`$${name}=${saved[name]}`);
+            } catch (error) {
+                const detail = error instanceof Error ? error.message : String(error);
+                restoreError = restoreError ?? new MiError('state', `registers not restored: ${detail}`);
+            }
+        }
+        for (const name of ['pc', 'msp', 'lr'] as const) {
+            try {
                 const actual = (await this.readRegister(name)) >>> 0;
                 if (actual !== saved[name]) {
                     throw new Error(`${name} expected ${saved[name]}, got ${actual}`);

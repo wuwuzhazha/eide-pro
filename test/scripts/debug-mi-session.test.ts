@@ -875,6 +875,9 @@ async function testBacktraceWithRegisters(): Promise<void> {
         readMismatch: false,
         readMismatchArmed: false,
         backtraceError: false,
+        savedPc: 0,
+        savedMsp: 0,
+        savedLr: 0,
     };
     const harness = createHarness((command, token) => {
         const expression = /^-data-evaluate-expression "(\$[^"]+)"$/.exec(command);
@@ -896,6 +899,10 @@ async function testBacktraceWithRegisters(): Promise<void> {
                 state.readMismatchArmed = false;
                 return `${token}^done,value="0x0"\n`;
             }
+            if (name === 'pc' && state.savedPc !== 0
+                && (Number(state.msp) !== state.savedMsp || Number(state.lr) !== state.savedLr)) {
+                return `${token}^done,value="0x800008e"\n`;
+            }
             const value = (state as any)[name];
             return `${token}^done,value="0x${Number(value).toString(16)}"\n`;
         }
@@ -909,6 +916,9 @@ async function testBacktraceWithRegisters(): Promise<void> {
     });
     await harness.session.connect('localhost:3333');
     harness.fake.written.length = 0;
+    state.savedPc = state.pc;
+    state.savedMsp = state.msp;
+    state.savedLr = state.lr;
     const frames = await harness.session.backtraceWithRegisters({
         pc: 0x0800000f, msp: 0x20004fe0, lr: 0x08000021
     });
@@ -922,8 +932,11 @@ async function testBacktraceWithRegisters(): Promise<void> {
         && evaluateCommands[5].includes('$lr=134217761'),
     'backtrace assigns pc, msp, lr in order');
     assert(evaluateCommands[6].includes('$pc=286331153')
-        && evaluateCommands[8].includes('$msp=572662306')
-        && evaluateCommands[10].includes('$lr=858993459'),
+        && evaluateCommands[7].includes('$msp=572662306')
+        && evaluateCommands[8].includes('$lr=858993459')
+        && evaluateCommands[9].includes('"$pc"')
+        && evaluateCommands[10].includes('"$msp"')
+        && evaluateCommands[11].includes('"$lr"'),
     'backtrace restores original pc, msp, lr in order');
     assert(commands.some((line: string) => line === '-stack-list-frames\n'), 'backtrace command is issued');
 
