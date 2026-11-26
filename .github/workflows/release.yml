@@ -150,4 +150,4 @@ jobs:
         env:
           OPEN_VSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
           VSIX_FILE: eide-pro-${{ steps.version.outputs.version }}.vsix
-        run: npx --yes ovsx@latest publish "$VSIX_FILE" --pat "$OPEN_VSX_PAT"
+        run: npx --yes ovsx@1.4.0 publish "$VSIX_FILE" --pat "$OPEN_VSX_PAT"
