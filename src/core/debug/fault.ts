@@ -49,7 +49,7 @@ export interface CortexFaultReport {
 }
 
 export const CORTEX_M_FAULT_REGISTERS = {
-    hfsr: 0xe000ed04,
+    hfsr: 0xe000ed2c,
     cfsr: 0xe000ed28,
     mmar: 0xe000ed34,
     bfar: 0xe000ed38,

@@ -90,7 +90,7 @@ let faultRegisters: { lr: string; msp: string; psp: string } = {
 let faultDisassemblyFails = false;
 
 const SCB_CONTENTS: { [address: string]: string } = {
-    '0xe000ed04': '00000040',
+    '0xe000ed2c': '00000040',
     '0xe000ed28': '81000000',
     '0xe000ed34': '00000020',
     '0xe000ed38': '00000008'
@@ -432,7 +432,7 @@ async function run(): Promise<void> {
     const faultCommands = harness.fake.written
         .slice(beforeFault)
         .map((line: string) => line.replace(/^\d+/, ''));
-    for (const address of ['0xe000ed04', '0xe000ed28', '0xe000ed34', '0xe000ed38']) {
+    for (const address of ['0xe000ed2c', '0xe000ed28', '0xe000ed34', '0xe000ed38']) {
         assert(faultCommands.includes(`-data-read-memory-bytes ${address} 4\n`),
             `headless debug: fault reads SCB memory at ${address}`);
     }
@@ -443,7 +443,7 @@ async function run(): Promise<void> {
     faultMemoryUnreadable = true;
     result = await execute('eide_debug_fault', { uid: 'debug-uid' });
     assert(result.isError === true
-        && result.content[0].text.includes('Cannot access memory at address 0xe000ed04'),
+        && result.content[0].text.includes('Cannot access memory at address 0xe000ed2c'),
     'headless debug: fault surfaces an unreadable SCB register');
     faultMemoryUnreadable = false;
 

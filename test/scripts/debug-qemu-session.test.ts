@@ -287,7 +287,7 @@ async function run(): Promise<void> {
             'qemu: reads a register');
 
         const scbHfsr = parse(await call('eide_debug_read_memory', {
-            address: '0xE000ED04', length: 4
+            address: '0xE000ED2C', length: 4
         }));
         const scbCfsr = parse(await call('eide_debug_read_memory', {
             address: '0xE000ED28', length: 4
