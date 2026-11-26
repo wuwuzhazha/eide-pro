@@ -258,6 +258,23 @@ npm run test:headless-package  # 安装 tgz、构建 Cortex-M fixture 并验证 
 分支、测试和 pull request 流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。安全
 问题请按 [SECURITY.md](./SECURITY.md) 私下报告。
 
+## 社区与支持
+
+使用问题、Bug 反馈和实战经验欢迎到 QQ 群 **EIDE Pro 交流区**（群号 `1137801106`）交流，
+也可以直接提 [GitHub issue](https://github.com/wuwuzhazha/eide-pro/issues)。
+
+<img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/qq-group.png" width="220" alt="QQ 群 EIDE Pro 交流区，群号 1137801106">
+
+<details>
+<summary>支持这个项目</summary>
+
+EIDE Pro 采用 MIT 许可证，功能持续免费。如果它帮你省了时间，欢迎请作者喝杯咖啡，
+用来覆盖维护成本。上游 EIDE 项目（github0null）有它自己的[赞助页](https://github.com/github0null/eide)。
+
+<img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/wechat-pay.png" width="200" alt="微信支付"> <img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/alipay.png" width="200" alt="支付宝">
+
+</details>
+
 ## 许可证
 
 MIT。详见 [LICENSE](./LICENSE) 和

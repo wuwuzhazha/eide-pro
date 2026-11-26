@@ -292,6 +292,25 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the branch, testing, and pull
 request workflow. Report security issues privately as described in
 [SECURITY.md](./SECURITY.md).
 
+## Community and support
+
+Questions, bug reports and field notes are welcome in the QQ group
+**EIDE Pro 交流区** (group number `1137801106`), or as
+[GitHub issues](https://github.com/wuwuzhazha/eide-pro/issues).
+
+<img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/qq-group.png" width="220" alt="QQ group EIDE Pro 交流区, number 1137801106">
+
+<details>
+<summary>Support the project</summary>
+
+EIDE Pro is MIT-licensed and stays free. If it saves you time, you can help
+cover the maintenance work. The upstream EIDE project by github0null has its own
+[sponsor page](https://github.com/github0null/eide).
+
+<img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/wechat-pay.png" width="200" alt="WeChat Pay"> <img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/alipay.png" width="200" alt="Alipay">
+
+</details>
+
 ## License
 
 MIT. See [LICENSE](./LICENSE) and
