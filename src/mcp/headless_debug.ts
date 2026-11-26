@@ -1,7 +1,14 @@
 import * as fs from 'fs';
 import * as NodePath from 'path';
-import { CORTEX_M_FAULT_REGISTERS, decodeCortexFault } from '../core/debug/fault';
 import {
+    CORTEX_M_FAULT_REGISTERS,
+    decodeCortexFault,
+    decodeStackedFrame,
+    selectFaultStack,
+    STACKED_FRAME_WORDS,
+} from '../core/debug/fault';
+import {
+    MiError,
     MiBreakpointRecord,
     MiFrame,
     MiSession,
@@ -260,12 +267,52 @@ export class HeadlessDebugSession {
             }
             throw new Error(`'${name}' is required when no debug session is active.`);
         };
-        return decodeCortexFault({
+        const report: any = decodeCortexFault({
             hfsr: await read('hfsr'),
             cfsr: await read('cfsr'),
             mmar: args.mmar !== undefined || session ? await read('mmar') : undefined,
             bfar: args.bfar !== undefined || session ? await read('bfar') : undefined
         });
+        if (!session) {
+            return report;
+        }
+
+        const excReturn = (await session.readRegister('lr')) >>> 0;
+        if (excReturn < 0xffffffe0) {
+            report.exception = null;
+            report.exceptionUnavailable = `LR is not an EXC_RETURN value (0x${excReturn.toString(16)})`;
+            return report;
+        }
+
+        const stack = selectFaultStack(excReturn);
+        const stackRegister = stack === 'MSP' ? 'msp' : 'psp';
+        const stackPointer = (await session.readRegister(stackRegister)) >>> 0;
+        const bytes = await session.readMemory(stackPointer, STACKED_FRAME_WORDS * 4);
+        const frame = decodeStackedFrame(Array.from({ length: STACKED_FRAME_WORDS }, (_, index) =>
+            bytes.readUInt32LE(index * 4)));
+        const resolve = async (address: number): Promise<any> => {
+            try {
+                return await session.resolveAddress(address);
+            } catch (error) {
+                const message = error instanceof MiError || error instanceof Error ? error.message : String(error);
+                return { address, error: message };
+            }
+        };
+        const pc = (frame.pc & ~1) >>> 0;
+        const callerAddress = frame.lr >>> 0 >= 0xffffffe0
+            ? undefined
+            : ((frame.lr & ~1) - 1) >>> 0;
+        report.exception = {
+            stack,
+            excReturn,
+            stackPointer,
+            frame,
+            faultLocation: await resolve(pc),
+            callerLocation: callerAddress === undefined
+                ? { address: frame.lr, error: 'stacked LR is an EXC_RETURN value, not a call site' }
+                : await resolve(callerAddress),
+        };
+        return report;
     }
 
     async svdLookup(project: HeadlessProject, args: Record<string, unknown>): Promise<any> {

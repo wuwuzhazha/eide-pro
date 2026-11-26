@@ -84,6 +84,10 @@ class FakeGdb {
 
 let malformed: 'none' | 'backtrace' | 'breakpoints' = 'none';
 let faultMemoryUnreadable = false;
+let faultRegisters: { lr: string; msp: string; psp: string } = {
+    lr: '0x0', msp: '0x20004fc0', psp: '0x0'
+};
+let faultDisassemblyFails = false;
 
 const SCB_CONTENTS: { [address: string]: string } = {
     '0xe000ed04': '00000040',
@@ -91,6 +95,8 @@ const SCB_CONTENTS: { [address: string]: string } = {
     '0xe000ed34': '00000020',
     '0xe000ed38': '00000008'
 };
+
+const STACKED_FRAME_CONTENTS = '0000000000000000000000209400000800000000870000089400000800000060';
 
 function response(command: string, token: number): string | string[] | undefined {
     if (command.startsWith('-gdb-set ')) {
@@ -114,19 +120,40 @@ function response(command: string, token: number): string | string[] | undefined
     if (command.startsWith('-data-evaluate-expression ')) {
         const expression = /^"\$(\w+)"$/.exec(command.slice('-data-evaluate-expression '.length));
         if (expression) {
-            const values: { [name: string]: string } = { r0: '0x1234' };
+            const values: { [name: string]: string } = {
+                r0: '0x1234', lr: faultRegisters.lr, msp: faultRegisters.msp, psp: faultRegisters.psp
+            };
             return `${token}^done,value="${values[expression[1]] || '0x0'}"\n(gdb) \n`;
         }
         return `${token}^done,value="42"\n(gdb) \n`;
     }
+    if (command.startsWith('-data-disassemble ')) {
+        if (faultDisassemblyFails) {
+            return `${token}^error,msg="Cannot access memory at address 0x08000085"\n`;
+        }
+        if (command.includes(' -s 0x8000094 ')) {
+            return `${token}^done,asm_insns=[src_and_asm_line={line="1",file="trap.c",fullname="C:\\\\fw\\\\trap.c",line_asm_insn=[{address="0x08000094",func-name="trap_line",offset="0",opcodes="80 b4",inst="push\\t{r7}"}]}]\n(gdb) \n`;
+        }
+        if (command.includes(' -s 0x8000085 ')) {
+            return `${token}^done,asm_insns=[src_and_asm_line={line="39",file="main.c",fullname="C:\\\\fw\\\\main.c",line_asm_insn=[{address="0x08000085",func-name="main",offset="16",opcodes="47 00",inst="blx\\tr3"}]}]\n(gdb) \n`;
+        }
+        return `${token}^error,msg="No symbol at address"\n`;
+    }
     if (command.startsWith('-data-read-memory-bytes ')) {
-        const match = /^-data-read-memory-bytes (0x[0-9a-f]+) 4$/.exec(command);
-        const contents = match === null ? undefined : SCB_CONTENTS[match[1]];
-        if (contents !== undefined) {
+        const match = /^-data-read-memory-bytes (0x[0-9a-f]+) 32$/.exec(command);
+        if (match && match[1] === faultRegisters.msp && faultRegisters.lr !== '0x0') {
+            return `${token}^done,memory=[{offset="0x0",contents="${STACKED_FRAME_CONTENTS}"}]\n(gdb) \n`;
+        }
+        if (match && match[1] === faultRegisters.psp && faultRegisters.lr === '0xfffffffd') {
+            return `${token}^done,memory=[{offset="0x0",contents="${STACKED_FRAME_CONTENTS}"}]\n(gdb) \n`;
+        }
+        const scbMatch = /^-data-read-memory-bytes (0x[0-9a-f]+) 4$/.exec(command);
+        const scbContents = scbMatch === null ? undefined : SCB_CONTENTS[scbMatch[1]];
+        if (scbContents !== undefined) {
             if (faultMemoryUnreadable) {
-                return `${token}^error,msg="Cannot access memory at address ${match![1]}"\n(gdb) \n`;
+                return `${token}^error,msg="Cannot access memory at address ${scbMatch![1]}"\n(gdb) \n`;
             }
-            return `${token}^done,memory=[{offset="0x0",contents="${contents}"}]\n(gdb) \n`;
+            return `${token}^done,memory=[{offset="0x0",contents="${scbContents}"}]\n(gdb) \n`;
         }
         return `${token}^done,memory=[{offset="0x0",contents="deadbeef"}]\n(gdb) \n`;
     }
@@ -420,6 +447,52 @@ async function run(): Promise<void> {
     'headless debug: fault surfaces an unreadable SCB register');
     faultMemoryUnreadable = false;
 
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    const beforeException = harness.fake.written.length;
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(data.exception !== null && data.exception.stack === 'MSP',
+        'headless debug: fault selects MSP from EXC_RETURN');
+    assert(data.exception.frame.pc === 0x08000094 && data.exception.frame.lr === 0x08000087,
+        'headless debug: fault decodes stacked pc and lr');
+    assert(data.exception.faultLocation.file === 'trap.c' && data.exception.faultLocation.line === 1,
+        'headless debug: fault location points to trap.c:1');
+    assert(data.exception.callerLocation.file === 'main.c' && data.exception.callerLocation.line === 39,
+        'headless debug: caller location points to main.c:39');
+    const exceptionCommands = harness.fake.written
+        .slice(beforeException)
+        .map((line: string) => line.replace(/^\d+/, ''));
+    assert(exceptionCommands.some((line: string) => line.startsWith('-data-disassemble -s 0x8000094 ')),
+        'headless debug: fault resolves stacked pc');
+    assert(exceptionCommands.some((line: string) => line.startsWith('-data-disassemble -s 0x8000085 ')),
+        'headless debug: fault resolves lr-1 call site');
+    assert(!exceptionCommands.some((line: string) => line.startsWith('-data-disassemble -s 0x8000086 ')),
+        'headless debug: fault does not resolve lr+0');
+    assert(exceptionCommands.some((line: string) => line === '-data-read-memory-bytes 0x20004fc0 32\n'),
+        'headless debug: fault reads 8 stacked words from MSP');
+
+    faultRegisters = { lr: '0xfffffffd', msp: '0x20004fc0', psp: '0x20004e00' };
+    harness.fake.written.length = 0;
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(data.exception.stack === 'PSP', 'headless debug: fault selects PSP from EXC_RETURN');
+    assert(harness.fake.written.some((line: string) => line.includes('-data-read-memory-bytes 0x20004e00 32')),
+        'headless debug: fault reads stacked frame from PSP');
+
+    faultRegisters = { lr: '0x0', msp: '0x20004fc0', psp: '0x0' };
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(data.exception === null && typeof data.exceptionUnavailable === 'string'
+        && data.exceptionUnavailable.includes('0x0'),
+    'headless debug: non-EXC_RETURN LR reports exception unavailable');
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    faultDisassemblyFails = true;
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(data.exception !== null && data.exception.faultLocation.address === 0x08000094
+        && typeof data.exception.faultLocation.error === 'string'
+        && data.reasons.some((reason: any) => reason.code === 'FORCED'),
+    'headless debug: failed location resolution keeps register decode');
+    faultDisassemblyFails = false;
+    faultRegisters = { lr: '0x0', msp: '0x20004fc0', psp: '0x0' };
+
     data = parse(await execute('eide_debug_interrupt', { uid: 'debug-uid' }));
     assert(data.success === true, 'headless debug: interrupt');
 
@@ -437,6 +510,13 @@ async function run(): Promise<void> {
 
     result = await execute('eide_debug_read_register', { uid: 'debug-uid', name: 'r0' });
     assert(result.isError === true, 'headless debug: session is closed');
+
+    data = parse(await execute('eide_debug_fault', {
+        uid: 'debug-uid', hfsr: '0x40000000', cfsr: '0x00020000', mmar: '0x20000000', bfar: '0x08000000'
+    }));
+    assert(data.reasons.some((reason: any) => reason.code === 'FORCED')
+        && data.exception === undefined && data.exceptionUnavailable === undefined,
+    'headless debug: offline fault decode has no exception field');
 }
 
 run()
