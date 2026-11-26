@@ -251,7 +251,7 @@ async function run(): Promise<void> {
             'qemu: stop frame is at main.c:7');
 
         const frames = parse(await call('eide_debug_backtrace', { maxDepth: 5 }));
-        assert(Array.isArray(frames) && frames.some((frame: any) =>
+        assert(Array.isArray(frames?.items) && frames.items.some((frame: any) =>
             typeof frame.functionName === 'string' && frame.functionName.includes('main')),
         'qemu: backtrace contains main');
 
