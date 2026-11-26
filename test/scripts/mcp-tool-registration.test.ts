@@ -44,10 +44,12 @@ async function run(): Promise<void> {
     await Promise.all([faultServer.connect(faultServerTransport), faultClient.connect(faultClientTransport)]);
     const faultTools = await faultClient.listTools();
     const faultDescription = faultTools.tools.find((tool: any) => tool.name === 'eide_debug_fault')?.description ?? '';
-    assert(faultDescription.includes('exception')
-        && faultDescription.includes('callerLocation')
-        && faultDescription.includes('faultLocation'),
-    `eide_debug_fault describes stacked-frame diagnosis (${faultDescription})`);
+    assert(faultDescription.includes('exception.backtrace.frames')
+        && faultDescription.includes('callSite')
+        && faultDescription.includes('faultPc'),
+    `eide_debug_fault describes the complete backtrace contract (${faultDescription})`);
+    assert(!/\)\.,|\.\./.test(faultDescription),
+        `eide_debug_fault description has no concatenation residue (${faultDescription})`);
     await faultClient.close();
 
     const unsupported = await executeTool('eide_debug_connect', { uid: 'probe' }, {} as any);

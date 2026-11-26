@@ -292,8 +292,9 @@ Addresses accept a number or a `0x`-prefixed string. `eide_debug_fault` reads
 HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.
 When stopped in a HardFault/exception handler, its `exception` adds the selected
 stack (MSP/PSP), stacked `frame`, `faultLocation` for the bad jumped-to PC, and
-`callerLocation` for stacked LR-1 (the call site to fix); otherwise `exception`
-is null with `exceptionUnavailable`. Passing hfsr/cfsr/... is offline decoding.
+`callerLocation` for stacked LR-1 (the call site to fix), plus `backtrace` for
+the call chain from the fault site; otherwise `exception` is null with
+`exceptionUnavailable`. Passing hfsr/cfsr/mmar/bfar is offline decoding.
 `eide_debug_backtrace` returns `{ items }` with frames carrying level, address,
 and optional function/file/line/fullname. `eide_debug_list_breakpoints` returns
 `{ items }` with breakpoint type, enabled state, address, source location,
@@ -349,6 +350,9 @@ eide_debug_disconnect(uid)
 5. Read exception.callerLocation.file/line: this is the call site to fix.
    exception.faultLocation is the bad address jumped into, usually not the line to edit.
    reasons containing FORCED mean another fault escalated to HardFault.
+6. Read exception.backtrace.frames: when from=callSite, frames[0] is the call site
+   to change and frames[1..] are its callers; when from=faultPc, frames[0] is the
+   faulting function.
 ```
 
 ### Change a define and rebuild
