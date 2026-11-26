@@ -37,7 +37,9 @@ function isAllowed(file, tracked) {
     return alias !== undefined && tracked.has(alias);
 }
 
-const vsceFiles = run('npx', ['--yes', '@vscode/vsce', 'ls']);
+// Pinned to the same vsce the release workflow packages with, so the check
+// cannot silently drift to a newer major with different inclusion rules.
+const vsceFiles = run('npx', ['--yes', '@vscode/vsce@2.15.0', 'ls']);
 const tracked = new Set(run('git', ['ls-files']).map(file => file.replace(/\\/g, '/')));
 const leaked = vsceFiles.filter(file => !isAllowed(file, tracked));
 
