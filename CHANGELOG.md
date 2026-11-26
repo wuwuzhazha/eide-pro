@@ -6,6 +6,21 @@ All notable version changes will be recorded in this file.
 
 ***
 
+### [v4.3.3]
+
+**New**:
+  - `eide_debug_fault` now diagnoses a HardFault down to the source line. Stopped in a fault handler, it also returns `exception`: the stack in use (MSP/PSP), the stacked register frame, `faultLocation` (the stacked PC, where execution was sent) and `callerLocation` (stacked LR-1, the call site that caused it) with file and line resolved through GDB. Outside an exception handler `exception` is null with a reason.
+  - `examples/hardfault-demo`: a Cortex-M3 firmware with a NULL callback in a table, plus a five-minute walkthrough. CI rebuilds it and reproduces the crash on QEMU on every commit.
+  - `eide-mcp --version` prints the installed version, so the skill staleness check can run.
+
+**Fixes**:
+  - `eide_debug_fault` read HFSR from the wrong address (0xE000ED04 is ICSR; HFSR is 0xE000ED2C) in 4.3.1 and 4.3.2, so the HardFault reasons it reported were wrong, for example a spurious `VECTTBL` instead of `FORCED`. It now reads the correct register; a QEMU test on a real fault guards the address.
+  - Updating the runtime binaries is staged: the new payload is extracted into a staging directory and swapped in only on success, with rollback to the previous install if the swap fails, and staging leftovers are cleaned, so a failed update no longer leaves a half-installed toolchain.
+  - Downloads time out when idle and remove partial files on failure.
+  - The tooling install verifies the installed `eide-cli` version after install.
+  - MCP server settings take effect immediately without restarting the extension.
+  - The getting-started walkthrough's "Learn More" link points to this repository.
+
 ### [v4.3.2]
 
 **Breaking**:
