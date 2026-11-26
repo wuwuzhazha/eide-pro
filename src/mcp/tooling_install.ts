@@ -116,3 +116,43 @@ export async function installHeadlessTooling(options: InstallOptions): Promise<I
 
     return { ok: true, message: `Installed eide-cli ${options.version}` };
 }
+
+const sha256HexPattern = /^[0-9a-f]{64}$/i;
+
+export function parseSha256ChecksumFile(text: string, fileName: string): string | undefined {
+    for (const line of text.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (trimmed.length === 0) {
+            continue;
+        }
+        const match = /^([0-9a-fA-F]{64})[ \t]+\*?(\S+)\s*$/.exec(trimmed);
+        if (match && match[2] === fileName) {
+            return match[1].toLowerCase();
+        }
+        if (sha256HexPattern.test(trimmed)) {
+            return trimmed.toLowerCase();
+        }
+    }
+    return undefined;
+}
+
+export function sha256HexOf(data: Buffer): string {
+    return require('crypto').createHash('sha256').update(data).digest('hex');
+}
+
+export type ChecksumVerification =
+    | { status: 'match' }
+    | { status: 'mismatch'; expected: string; actual: string }
+    | { status: 'unparseable' };
+
+export function verifyFileSha256(fileData: Buffer, checksumText: string, fileName: string): ChecksumVerification {
+    const expected = parseSha256ChecksumFile(checksumText, fileName);
+    if (expected === undefined) {
+        return { status: 'unparseable' };
+    }
+    const actual = sha256HexOf(fileData);
+    if (actual !== expected) {
+        return { status: 'mismatch', expected, actual };
+    }
+    return { status: 'match' };
+}

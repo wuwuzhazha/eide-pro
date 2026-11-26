@@ -6,6 +6,14 @@ All notable version changes will be recorded in this file.
 
 ***
 
+### [Unreleased]
+
+**New**:
+  - Release assets now ship with `.sha256` checksum files, and the tooling install verifies the downloaded tarball against them before running npm. Truncated or corrupted downloads are retried, and a persistent checksum mismatch fails the install loudly instead of installing a broken package.
+
+**Fixes**:
+  - The tooling download rejects truncated transfers (received bytes must match the response `Content-Length`), so a dropped connection can no longer produce a silently partial tarball.
+
 ### [v4.3.1]
 
 **Breaking**:

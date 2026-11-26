@@ -59,7 +59,7 @@ import {
     view_str$prompt$tooling_install_done, view_str$prompt$tooling_install_failed,
     view_str$prompt$tooling_install_manual
 } from './StringTable';
-import { decideInstallPrompt, installHeadlessTooling, releaseTarballUrl, ToolingState } from './mcp/tooling_install';
+import { decideInstallPrompt, installHeadlessTooling, releaseTarballUrl, ToolingState, verifyFileSha256 } from './mcp/tooling_install';
 import { LogDumper } from './LogDumper';
 import { findDotnetExecutable, findInstalledDotnetRuntime, getDotnetRootDirs } from './DotnetRuntime';
 import { StatusBarManager } from './StatusBarManager';
@@ -106,7 +106,9 @@ const retryableNetworkCodes = ['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNABORTED
 const retryableNetworkMessages = [
     'Client network socket disconnected before secure TLS connection was established',
     'ssl3_read_bytes',
-    'socket hang up'
+    'socket hang up',
+    'Truncated download',
+    'SHA-256 mismatch'
 ];
 
 // explicit bounds for the .NET6 runtime check/install in checkAndInstallRuntime
@@ -279,22 +281,79 @@ function downloadHttpsFile(url: string, dest: string,
                     reject(new Error(`Download failed: HTTP ${status} for ${current}`));
                     return;
                 }
-                if (onProgress) {
-                    const total = parseInt(res.headers['content-length'] || '');
-                    let received = 0;
-                    res.on('data', (buf: Buffer) => {
-                        received += buf.length;
-                        onProgress(received, total);
-                    });
-                }
+                const total = parseInt(res.headers['content-length'] || '');
+                let received = 0;
+                res.on('data', (buf: Buffer) => {
+                    received += buf.length;
+                    onProgress?.(received, total);
+                });
+                res.once('error', reject);
                 const file = fs.createWriteStream(dest);
                 res.pipe(file);
-                file.once('finish', () => file.close(() => resolve()));
+                file.once('finish', () => file.close(() => {
+                    if (!Number.isNaN(total) && received !== total) {
+                        fs.rmSync(dest, { force: true });
+                        reject(new Error(`Truncated download: received ${received} of ${total} bytes`));
+                        return;
+                    }
+                    resolve();
+                }));
                 file.once('error', reject);
             }).once('error', reject);
         };
         follow(url, toolingDownloadMaxRedirects);
     });
+}
+
+function fetchHttpsText(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const follow = (current: string, redirectsLeft: number) => {
+            if (redirectsLeft <= 0) {
+                reject(new Error(`Too many redirects: ${url}`));
+                return;
+            }
+            https.get(current, { headers: { 'user-agent': 'eide-pro' } }, res => {
+                const status = res.statusCode ?? 0;
+                if (status >= 300 && status < 400 && res.headers.location) {
+                    res.resume();
+                    follow(new URL(res.headers.location, current).toString(), redirectsLeft - 1);
+                    return;
+                }
+                if (status !== 200) {
+                    res.resume();
+                    reject(new Error(`Download failed: HTTP ${status} for ${current}`));
+                    return;
+                }
+                let body = '';
+                res.setEncoding('utf8');
+                res.on('data', chunk => body += chunk);
+                res.once('end', () => resolve(body));
+                res.once('error', reject);
+            }).once('error', reject);
+        };
+        follow(url, toolingDownloadMaxRedirects);
+    });
+}
+
+export async function downloadToolingPackageWithChecksum(url: string, dest: string): Promise<void> {
+    await downloadHttpsFile(url, dest);
+    const checksumUrl = `${url}.sha256`;
+    let checksumText: string;
+    try {
+        checksumText = await fetchHttpsText(checksumUrl);
+    } catch (error) {
+        fs.rmSync(dest, { force: true });
+        throw error;
+    }
+    const verification = verifyFileSha256(fs.readFileSync(dest), checksumText, NodePath.basename(dest));
+    if (verification.status === 'unparseable') {
+        fs.rmSync(dest, { force: true });
+        throw new Error(`checksum file has no usable digest: ${checksumUrl}`);
+    }
+    if (verification.status === 'mismatch') {
+        fs.rmSync(dest, { force: true });
+        throw new Error(`SHA-256 mismatch for ${NodePath.basename(dest)}: expected ${verification.expected}, got ${verification.actual}`);
+    }
 }
 
 function runToolingCommand(
@@ -339,7 +398,7 @@ async function installTooling(
             workDir,
             download: async (url, dest) => {
                 await downloadToolingPackageWithRetry(
-                    downloadHttpsFile,
+                    downloadToolingPackageWithChecksum,
                     url,
                     dest,
                     message => progress.report({ message })

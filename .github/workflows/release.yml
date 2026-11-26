@@ -112,6 +112,24 @@ jobs:
             exit 1
           fi
 
+      - name: Write SHA-256 checksums for every release asset
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for artifact in "eide-pro-${VERSION}.vsix" "artifacts/eide-pro-headless-${VERSION}.tgz" "eide-mcp-tools-skill.zip"; do
+            digest="$(sha256sum "$artifact" | awk '{print $1}')"
+            base="$(basename "$artifact")"
+            printf '%s  %s\n' "$digest" "$base" > "${base}.sha256"
+            echoed="$(awk '{print $1}' "${base}.sha256")"
+            if [ "$echoed" != "$digest" ]; then
+              echo "::error::checksum round-trip failed for ${base}"
+              exit 1
+            fi
+          done
+          ls -la ./*.sha256
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -119,8 +137,11 @@ jobs:
           generate_release_notes: true
           files: |
             eide-pro-${{ steps.version.outputs.version }}.vsix
+            eide-pro-${{ steps.version.outputs.version }}.vsix.sha256
             artifacts/eide-pro-headless-${{ steps.version.outputs.version }}.tgz
+            eide-pro-headless-${{ steps.version.outputs.version }}.tgz.sha256
             eide-mcp-tools-skill.zip
+            eide-mcp-tools-skill.zip.sha256
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
