@@ -135,7 +135,8 @@ bundles.
 
 1. Install EIDE Pro.
 2. Install a supported toolchain and set its path in the EIDE Pro
-   **Operations** view.
+   **Operations** view, or follow the startup walkthrough
+   (Get Started → Setup Toolchain) that offers the same step.
 3. Create a project from a template, or import an existing Keil, IAR, or
    Eclipse project.
 4. Build the project, then flash a device or start a debug session from the

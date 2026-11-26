@@ -120,7 +120,8 @@ npx @vscode/vsce@2.15.0 package
 ## 快速开始
 
 1. 安装 EIDE Pro。
-2. 安装受支持的工具链，并在 EIDE Pro 的 **Operations** 视图中设置其路径。
+2. 安装受支持的工具链，并在 EIDE Pro 的 **Operations** 视图中设置其路径；
+   也可以按首次启动的引导提示操作（Get Started → 设置编译器路径），两者是同一步。
 3. 从模板创建工程，或导入已有的 Keil、IAR 或 Eclipse 工程。
 4. 构建工程，然后在工程视图中烧录设备或启动调试会话。
 
