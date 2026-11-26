@@ -6,6 +6,12 @@ All notable version changes will be recorded in this file.
 
 ***
 
+### [v4.3.4]
+
+**New**:
+  - `eide_debug_fault` now returns `exception.backtrace`: the call chain from the fault site, resolved to function, file and line. For a jump to an address with no symbol (such as a null function pointer) frame 0 is the caller that made the bad jump and the frames above it say who called that caller; for a fault inside a known function frame 0 is that function. While unwinding, the debugger's PC, SP and LR are temporarily rewritten and restored before the tool returns; a restore failure fails the tool instead of returning a report from a corrupted target.
+  - `examples/hardfault-demo` documents the two-frame result, and CI asserts it on QEMU for every commit.
+
 ### [v4.3.3]
 
 **New**:
