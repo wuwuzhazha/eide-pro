@@ -71,6 +71,7 @@ import { VirtualDocument } from './VirtualDocsProvider';
 import * as utility from './utility';
 import * as platform from './Platform';
 import { EXTENSION_ID } from './ExtensionInfo';
+import { cleanupStaleStaging, installBinaries } from './core/binaries_install';
 import { commandProbeInvocation, probeCommand, probeProcessOutput } from './core/command_probe';
 
 const extension_deps: string[] = [];
@@ -1127,6 +1128,8 @@ async function tryUpdateBinaries(binFolder: File, localVer?: string): Promise<bo
 
 async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<boolean> {
 
+    cleanupStaleStaging(NodePath.dirname(binFolder.path));
+
     // zip type
     const binType = BINARIES_ASSET_EXT;
 
@@ -1194,53 +1197,30 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
             }, async (progress, __): Promise<boolean> => {
 
                 return new Promise((resolve_) => {
-
-                    let resolved = false;
-                    const resolveIf = (data: boolean) => {
-                        if (!resolved) {
-                            resolved = true;
-                            resolve_(data);
-                        }
-                    };
-
                     let prevPercent: number = 0;
 
-                    // del old binaries
-                    if (binFolder.IsDir()) {
-                        progress.report({ message: `Cleanup old files ...` });
-                        platform.DeleteAllChildren(binFolder);
-                    }
-
-                    // make dir
-                    binFolder.CreateDir(true);
-
-                    // start unzip
-                    node7z.extractFull(tmpFile.path, binFolder.path, {
-                        $bin: ResManager.GetInstance().Get7za().path,
-                        $progress: true,
-                        recursive: true
-                    })
-                        // unzip done
-                        .on('end', () => {
+                    installBinaries(binFolder.path, (staging) => new Promise<void>((resolveExtract, rejectExtract) => {
+                        node7z.extractFull(tmpFile.path, staging, {
+                            $bin: ResManager.GetInstance().Get7za().path,
+                            $progress: true,
+                            recursive: true
+                        })
+                            .on('end', () => resolveExtract())
+                            .on('error', rejectExtract)
+                            .on('progress', (info) => {
+                                prevPercent = info.percent;
+                            })
+                            .on('data', (data) => {
+                                progress.report({ message: `${prevPercent}%, in '${data.file}'` });
+                            });
+                    })).then(result => {
+                        if (result.success) {
                             progress.report({ message: `Install eide binaries done !` });
-                            setTimeout(() => resolveIf(true), 500);
-                        })
-
-                        // unzip error
-                        .on('error', (err) => {
-                            GlobalEvent.emit('error', err);
-                            resolveIf(false);
-                        })
-
-                        // progress
-                        .on('progress', (info) => {
-                            prevPercent = info.percent;
-                        })
-
-                        // file info
-                        .on('data', (data) => {
-                            progress.report({ message: `${prevPercent}%, in '${data.file}'` });
-                        });
+                        } else {
+                            GlobalEvent.emit('error', new Error(result.message));
+                        }
+                        resolve_(result.success);
+                    });
                 });
             });
         }
@@ -1252,11 +1232,6 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
 
     } catch (error) {
         GlobalEvent.emit('error', error);
-    }
-
-    /* clear dir if failed */
-    if (!installedDone) {
-        platform.DeleteDir(binFolder);
     }
 
     if (installedDone) {
