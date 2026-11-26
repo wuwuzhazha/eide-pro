@@ -1,0 +1,46 @@
+version: '4.1'
+name: hardfault-demo
+type: ARM
+srcDirs:
+  - src
+outDir: build
+dependenceList: []
+miscInfo:
+  uid: hardfault-demo
+targets:
+  Debug:
+    toolchain: GCC
+    toolchainConfigMap:
+      GCC:
+        cpuType: Cortex-M3
+        floatingPointHardware: default
+        useCustomScatterFile: true
+        scatterFilePath: link.ld
+        options:
+          version: 5
+          global:
+            output-debug-info: enable
+          c/cpp-compiler:
+            language-c: c11
+            optimization: level-debug
+            warnings: all-warnings
+            one-elf-section-per-function: true
+            one-elf-section-per-data: true
+            C_FLAGS: ''
+            CXX_FLAGS: ''
+          asm-compiler:
+            ASM_FLAGS: ''
+          linker:
+            remove-unused-input-sections: true
+            LD_FLAGS: '-nostdlib -nostartfiles'
+            LIB_FLAGS: ''
+    uploader: JLink
+    uploadConfigMap:
+      JLink: {}
+    excludeList: []
+    cppPreprocessAttrs:
+      name: default
+      incList: []
+      libList: []
+      defineList: []
+    settings: {}

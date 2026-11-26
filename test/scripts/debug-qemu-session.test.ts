@@ -115,61 +115,10 @@ function stopProcess(child: any): Promise<void> {
     });
 }
 
-const FAULT_STARTUP_SOURCE = [
-    'typedef unsigned int u32;',
-    'extern u32 _estack;',
-    'extern u32 _sidata;',
-    'extern u32 _sdata;',
-    'extern u32 _edata;',
-    'extern u32 _sbss;',
-    'extern u32 _ebss;',
-    'extern int main(void);',
-    'void Reset_Handler(void);',
-    'void HardFault_Handler(void);',
-    '',
-    '__attribute__((section(".isr_vector"), used))',
-    'void (* const g_vectors[])(void) = {',
-    '    (void (*)(void))&_estack,',
-    '    Reset_Handler,',
-    '    HardFault_Handler,',
-    '    HardFault_Handler',
-    '};',
-    '',
-    'void Reset_Handler(void)',
-    '{',
-    '    u32 *source = &_sidata;',
-    '    u32 *destination = &_sdata;',
-    '    while (destination < &_edata) { *destination++ = *source++; }',
-    '    for (destination = &_sbss; destination < &_ebss;) { *destination++ = 0; }',
-    '    main();',
-    '    for (;;) {}',
-    '}',
-    '',
-    '__attribute__((naked)) void HardFault_Handler(void)',
-    '{',
-    '    __asm volatile ("bkpt #0\\n\\tb .\\n");',
-    '}',
-    ''
-].join('\n');
-
-function faultMainSource(): { source: string; badCallLine: number } {
-    const lines = [
-        'extern void trap_line(void);',
-        '',
-        'void trap_line(void) {}',
-        '',
-        'int main(void)',
-        '{',
-        '    void (*bad)(void) = (void (*)(void))((unsigned int)&trap_line & ~1u);',
-        '    bad();',
-        '    for (;;) {}',
-        '}',
-        ''
-    ];
-    return { source: lines.join('\n'), badCallLine: lines.findIndex(line => line.trim() === 'bad();') + 1 };
-}
-
-async function prepareQemuSession(sources: { main: string; startup?: string }): Promise<{
+async function prepareQemuSession(options: {
+    fixtureDir: string;
+    main?: string;
+}): Promise<{
     root: string;
     project: string;
     qemuProcess: any;
@@ -179,9 +128,8 @@ async function prepareQemuSession(sources: { main: string; startup?: string }): 
     const repoRoot = process.cwd();
     const root = fs.mkdtempSync(NodePath.join(os.tmpdir(), 'eide-debug-qemu-'));
     const project = NodePath.join(root, 'project');
-    const fixture = NodePath.join(repoRoot, 'test', 'e2e', 'fixtures', 'cortex-m3');
+    const fixture = options.fixtureDir;
     const mainSource = NodePath.join(project, 'src', 'main.c');
-    const startupSource = NodePath.join(project, 'src', 'startup.c');
     const distCli = NodePath.join(repoRoot, 'dist', 'eide_cli.js');
     const resourcesDir = NodePath.join(repoRoot, 'res');
     if (!fs.existsSync(fixture)) {
@@ -195,9 +143,8 @@ async function prepareQemuSession(sources: { main: string; startup?: string }): 
         console.error(`FAIL: QEMU breakpoint source not found at ${mainSource}`);
         process.exit(1);
     }
-    write(mainSource, sources.main);
-    if (sources.startup !== undefined) {
-        write(startupSource, sources.startup);
+    if (options.main !== undefined) {
+        write(mainSource, options.main);
     }
     console.log(`OK: QEMU fixture prepared from ${fixture}`);
 
@@ -251,13 +198,15 @@ async function prepareQemuSession(sources: { main: string; startup?: string }): 
         debugCommandTimeoutMs: 10000,
         debugStopTimeoutMs: 10000
     });
-    const uid = 'headless-e2e';
+    const projectConfig = yaml.parse(fs.readFileSync(NodePath.join(project, '.eide', 'eide.yml'), 'utf8'));
+    const uid = String(projectConfig.miscInfo.uid);
     const call = (tool: string, args: Record<string, unknown> = {}) => execute(tool, { uid, ...args });
     return { root, project, qemuProcess, target, call };
 }
 
 async function run(): Promise<void> {
     let session = await prepareQemuSession({
+        fixtureDir: NodePath.join(process.cwd(), 'test', 'e2e', 'fixtures', 'cortex-m3'),
         main: [
         'volatile unsigned int counter;',
         '',
@@ -393,8 +342,11 @@ async function run(): Promise<void> {
         qemuProcess = undefined;
         fs.rmSync(root, { recursive: true, force: true });
 
-        const faultMain = faultMainSource();
-        session = await prepareQemuSession({ main: faultMain.source, startup: FAULT_STARTUP_SOURCE });
+        const demoRoot = NodePath.join(process.cwd(), 'examples', 'hardfault-demo');
+        const demoMain = fs.readFileSync(NodePath.join(demoRoot, 'src', 'main.c'), 'utf8');
+        const badCallLine = demoMain.split(/\r?\n/).findIndex((line: string) => line.trim() === 'sensor->on_event();') + 1;
+        assert(badCallLine > 0, 'qemu fault: demo source contains the null callback call');
+        session = await prepareQemuSession({ fixtureDir: demoRoot });
         try {
             const faultCall = session.call;
             const connectResult = await faultCall('eide_debug_connect', {
@@ -419,13 +371,15 @@ async function run(): Promise<void> {
             assert(codes.includes('FORCED') && codes.includes('INVSTATE'),
                 'qemu fault: reports FORCED and INVSTATE');
             assert(report.exception?.stack === 'MSP', 'qemu fault: fault frame uses MSP');
-            assert(report.exception?.faultLocation?.functionName === 'trap_line',
-                'qemu fault: fault location is trap_line');
-            assert(report.exception?.callerLocation?.functionName === 'main'
+            assert(report.exception?.faultLocation?.address === 0
+                && report.exception?.faultLocation?.file === undefined
+                && report.exception?.faultLocation?.line === undefined,
+            'qemu fault: fault location is address 0 without invented source');
+            assert(report.exception?.callerLocation?.functionName === 'poll'
                 && String(report.exception?.callerLocation?.file).endsWith('main.c'),
-            'qemu fault: caller location is main');
-            assert(Number(report.exception?.callerLocation?.line) === faultMain.badCallLine,
-                'qemu fault: caller location is the bad(); call line');
+            'qemu fault: caller location is poll in main.c');
+            assert(Number(report.exception?.callerLocation?.line) === badCallLine,
+                'qemu fault: caller location is the null callback call line');
             await faultCall('eide_debug_disconnect');
             console.log('QEMU FAULT DIAGNOSIS RAN');
         } finally {
