@@ -88,6 +88,28 @@ incident record is dropped when memory fades.
    parsing were later disproved.
    Protocol: `.tasks/audit/PROTOCOL.md` (local, not tracked).
 
+10. Counter-proof and iteration run the single test file you changed; the
+    full suite runs once, right before delivery.
+    Incident: a full `npm test` takes about 71 s while a single file takes
+    about 10 s (compile:test 3 s plus the file 6 s). Measured on 79 runs of
+    three members, the median run was 3.6 to 3.9 minutes and the baseline,
+    counter-proof and after-fix cycles were more than half of it.
+
+11. Every new exported function has at least one test, each with a
+    counter-proof, and every failure path states how the scene is left
+    (handles, temp files, partial artifacts).
+    Incident: `cleanupStaleStaging` shipped untested and threw ENOENT on a
+    missing parent while never removing backup leftovers; the download
+    timeout path left the write stream open and a partial file behind. Both
+    were found only at PM review and each cost a full extra round.
+
+12. A task card is one independently verifiable behavior plus its failure
+    path: at most three files, at most one new module plus its test, and a
+    run that fits in about five minutes. Multi-item cards commit one item per
+    commit.
+    Incident: a member's model quota ran out mid-card; the four items already
+    committed one by one were kept intact, nothing was lost.
+
 ## Checks
 
 Dispatch: `npm run check:task-card -- <card.md>` — validates the card's
