@@ -7,6 +7,9 @@ import {
     decodeCortexFault,
     decodeHfsr,
     HFSR_BITS,
+    selectFaultStack,
+    decodeStackedFrame,
+    STACKED_FRAME_WORDS,
 } from '../../src/core/debug/fault';
 
 function assert(condition: boolean, message: string): void {
@@ -160,3 +163,48 @@ const unmasked = decodeCortexFault({ hfsr: -1, cfsr: -1 });
 assertEqual(unmasked.reasons.length, 20, 'negative register values are masked to 32 bits');
 
 console.log('debug-fault tests passed');
+
+assertEqual(STACKED_FRAME_WORDS, 8, 'stacked frame word count');
+assertEqual(selectFaultStack(0xfffffff9), 'MSP', 'exc_return 0xfffffff9 uses MSP');
+assertEqual(selectFaultStack(0xfffffffd), 'PSP', 'exc_return 0xfffffffd uses PSP');
+assertEqual(selectFaultStack(0xfffffff1), 'MSP', 'exc_return 0xfffffff1 uses MSP');
+
+for (const invalid of [0x08000087, 0]) {
+    let message = '';
+    try {
+        selectFaultStack(invalid);
+    } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.includes(invalid.toString(16)), `invalid exc_return ${invalid} is rejected with hex value`);
+}
+
+const stackedWords = [
+    0x00000000, 0x00000000, 0x20000000, 0x08000094,
+    0x00000000, 0x08000087, 0x08000094, 0x60000000
+];
+const frame = decodeStackedFrame(stackedWords);
+assertEqual(frame.r0, 0x00000000, 'stacked r0');
+assertEqual(frame.r1, 0x00000000, 'stacked r1');
+assertEqual(frame.r2, 0x20000000, 'stacked r2');
+assertEqual(frame.r3, 0x08000094, 'stacked r3');
+assertEqual(frame.r12, 0x00000000, 'stacked r12');
+assertEqual(frame.lr, 0x08000087, 'stacked lr');
+assertEqual(frame.pc, 0x08000094, 'stacked pc');
+assertEqual(frame.xpsr, 0x60000000, 'stacked xpsr');
+
+for (const count of [7, 9]) {
+    let message = '';
+    try {
+        decodeStackedFrame(new Array(count).fill(0));
+    } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.includes(String(count)), `stacked frame with ${count} words is rejected with count`);
+}
+
+const negativeFrame = decodeStackedFrame([-1, -2, -3, -4, -5, -6, -7, -8]);
+assertEqual(negativeFrame.r0, 0xffffffff, 'negative stacked word is normalized to unsigned');
+assertEqual(negativeFrame.xpsr, 0xfffffff8, 'negative xpsr is normalized to unsigned');
+
+console.log('debug-fault stacked frame tests passed');

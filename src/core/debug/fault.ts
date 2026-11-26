@@ -55,6 +55,43 @@ export const CORTEX_M_FAULT_REGISTERS = {
     bfar: 0xe000ed38,
 } as const;
 
+export const STACKED_FRAME_WORDS = 8;
+
+export interface CortexStackedFrame {
+    r0: number;
+    r1: number;
+    r2: number;
+    r3: number;
+    r12: number;
+    lr: number;
+    pc: number;
+    xpsr: number;
+}
+
+export function selectFaultStack(excReturn: number): 'MSP' | 'PSP' {
+    const value = excReturn >>> 0;
+    if (value < 0xffffffe0) {
+        throw new Error(`Invalid EXC_RETURN: 0x${value.toString(16)}`);
+    }
+    return (value & 0x4) === 0 ? 'MSP' : 'PSP';
+}
+
+export function decodeStackedFrame(words: readonly number[]): CortexStackedFrame {
+    if (words.length !== STACKED_FRAME_WORDS) {
+        throw new Error(`Stacked frame must have ${STACKED_FRAME_WORDS} words, got ${words.length}`);
+    }
+    return {
+        r0: words[0] >>> 0,
+        r1: words[1] >>> 0,
+        r2: words[2] >>> 0,
+        r3: words[3] >>> 0,
+        r12: words[4] >>> 0,
+        lr: words[5] >>> 0,
+        pc: words[6] >>> 0,
+        xpsr: words[7] >>> 0,
+    };
+}
+
 export const HFSR_BITS = {
     VECTTBL: 0x00000002,
     FORCED: 0x40000000,
