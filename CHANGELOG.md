@@ -8,12 +8,18 @@ All notable version changes will be recorded in this file.
 
 ### [v4.3.2]
 
+**Breaking**:
+  - MCP tools that return collections now wrap them in an object (`{ "items": [...] }`) instead of a bare array, as the MCP specification requires `structuredContent` to be an object. Affected: `eide_get_src_dirs`, `eide_get_inc_dirs`, `eide_get_defines`, `eide_debug_backtrace`, `eide_debug_list_breakpoints`.
+
 **New**:
   - Release assets now ship with `.sha256` checksum files, and the tooling install verifies the downloaded tarball against them before running npm. Truncated or corrupted downloads are retried, and a persistent checksum mismatch fails the install loudly instead of installing a broken package.
+  - `eide_flash` supports `dryRun` on every transport: it returns the planned flash invocation without programming the device.
+  - `eide_get_environment` is now implemented in the VS Code extension server too, matching the headless report shape.
 
 **Fixes**:
   - The tooling download rejects truncated transfers (received bytes must match the response `Content-Length`), so a dropped connection can no longer produce a silently partial tarball.
   - The runtime binaries download verifies its `.sha256` sidecar for payloads versioned 13.0.0 or newer; a checksum mismatch or an unusable checksum fails the install instead of unpacking a corrupted payload.
+  - `eide_flash` no longer ignores a `dryRun: true` argument on the extension server; previously the schema did not declare it for that transport, so the safety parameter was silently dropped and the device was programmed anyway.
 
 ### [v4.3.1]
 
