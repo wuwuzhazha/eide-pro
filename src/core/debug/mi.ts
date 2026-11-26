@@ -1007,7 +1007,7 @@ export class MiSession {
             await this.selectFrame(0);
             await this.evaluate(`$pc=${context.pc}`);
             await this.selectFrame(0);
-            await this.evaluate(`$msp=${context.sp}`);
+            await this.evaluate(`$sp=${context.sp}`);
             await this.selectFrame(0);
             await this.evaluate(`$lr=${context.lr}`);
             frames = await this.backtrace();
