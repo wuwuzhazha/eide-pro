@@ -72,6 +72,7 @@ import * as utility from './utility';
 import * as platform from './Platform';
 import { EXTENSION_ID } from './ExtensionInfo';
 import { cleanupStaleStaging, installBinaries } from './core/binaries_install';
+import { downloadHttpsFile, fetchHttpsText } from './core/https_download';
 import { commandProbeInvocation, probeCommand, probeProcessOutput } from './core/command_probe';
 
 const extension_deps: string[] = [];
@@ -260,80 +261,6 @@ function probeToolingDotnetMajor(): number | undefined {
     const runtime = findInstalledDotnetRuntime(6);
     const match = runtime ? /Microsoft\.NETCore\.App (\d+)\./.exec(runtime) : undefined;
     return match ? Number(match[1]) : undefined;
-}
-
-function downloadHttpsFile(url: string, dest: string,
-    onProgress?: (received: number, total: number) => void): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const follow = (current: string, redirectsLeft: number) => {
-            if (redirectsLeft <= 0) {
-                reject(new Error(`Too many redirects: ${url}`));
-                return;
-            }
-            https.get(current, { headers: { 'user-agent': 'eide-pro' } }, res => {
-                const status = res.statusCode ?? 0;
-                if (status >= 300 && status < 400 && res.headers.location) {
-                    res.resume();
-                    follow(new URL(res.headers.location, current).toString(), redirectsLeft - 1);
-                    return;
-                }
-                if (status !== 200) {
-                    res.resume();
-                    reject(new Error(`Download failed: HTTP ${status} for ${current}`));
-                    return;
-                }
-                const total = parseInt(res.headers['content-length'] || '');
-                let received = 0;
-                res.on('data', (buf: Buffer) => {
-                    received += buf.length;
-                    onProgress?.(received, total);
-                });
-                res.once('error', reject);
-                const file = fs.createWriteStream(dest);
-                res.pipe(file);
-                file.once('finish', () => file.close(() => {
-                    if (!Number.isNaN(total) && received !== total) {
-                        fs.rmSync(dest, { force: true });
-                        reject(new Error(`Truncated download: received ${received} of ${total} bytes`));
-                        return;
-                    }
-                    resolve();
-                }));
-                file.once('error', reject);
-            }).once('error', reject);
-        };
-        follow(url, toolingDownloadMaxRedirects);
-    });
-}
-
-function fetchHttpsText(url: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const follow = (current: string, redirectsLeft: number) => {
-            if (redirectsLeft <= 0) {
-                reject(new Error(`Too many redirects: ${url}`));
-                return;
-            }
-            https.get(current, { headers: { 'user-agent': 'eide-pro' } }, res => {
-                const status = res.statusCode ?? 0;
-                if (status >= 300 && status < 400 && res.headers.location) {
-                    res.resume();
-                    follow(new URL(res.headers.location, current).toString(), redirectsLeft - 1);
-                    return;
-                }
-                if (status !== 200) {
-                    res.resume();
-                    reject(new Error(`Download failed: HTTP ${status} for ${current}`));
-                    return;
-                }
-                let body = '';
-                res.setEncoding('utf8');
-                res.on('data', chunk => body += chunk);
-                res.once('end', () => resolve(body));
-                res.once('error', reject);
-            }).once('error', reject);
-        };
-        follow(url, toolingDownloadMaxRedirects);
-    });
 }
 
 export async function downloadToolingPackageWithChecksum(url: string, dest: string): Promise<void> {
