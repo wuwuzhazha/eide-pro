@@ -259,7 +259,8 @@ function probeToolingDotnetMajor(): number | undefined {
     return match ? Number(match[1]) : undefined;
 }
 
-function downloadToolingPackage(url: string, dest: string): Promise<void> {
+function downloadHttpsFile(url: string, dest: string,
+    onProgress?: (received: number, total: number) => void): Promise<void> {
     return new Promise((resolve, reject) => {
         const follow = (current: string, redirectsLeft: number) => {
             if (redirectsLeft <= 0) {
@@ -277,6 +278,14 @@ function downloadToolingPackage(url: string, dest: string): Promise<void> {
                     res.resume();
                     reject(new Error(`Download failed: HTTP ${status} for ${current}`));
                     return;
+                }
+                if (onProgress) {
+                    const total = parseInt(res.headers['content-length'] || '');
+                    let received = 0;
+                    res.on('data', (buf: Buffer) => {
+                        received += buf.length;
+                        onProgress(received, total);
+                    });
                 }
                 const file = fs.createWriteStream(dest);
                 res.pipe(file);
@@ -330,7 +339,7 @@ async function installTooling(
             workDir,
             download: async (url, dest) => {
                 await downloadToolingPackageWithRetry(
-                    downloadToolingPackage,
+                    downloadHttpsFile,
                     url,
                     dest,
                     message => progress.report({ message })
@@ -850,6 +859,61 @@ function cleanCache() {
 // eide binaries installer
 //////////////////////////////////////////////////
 
+const BINARIES_RELEASE_REPO = 'wuwuzhazha/eide-pro';
+const BINARIES_RELEASE_TAG_PREFIX = 'binaries/';
+const BINARIES_ASSET_EXT = '7z';
+
+/**
+ * Binaries payloads are assets of `binaries/<version>` releases of this
+ * repository, so a release only counts when it carries this runtime's asset.
+ */
+async function getAvailableBinariesVersions(): Promise<string[] | Error> {
+    const url = `https://api.github.com/repos/${BINARIES_RELEASE_REPO}/releases?per_page=100`;
+    const assetName = `bin-${platform.getRuntimeId()}.${BINARIES_ASSET_EXT}`;
+    try {
+        const cont = await utility.requestTxt(utility.redirectHost(url));
+        if (typeof cont != 'string') {
+            return cont instanceof Error ? cont : new Error(`Empty response from '${url}'`);
+        }
+        let parsed: unknown;
+        try { parsed = JSON.parse(cont); } catch (error) { return error as Error; }
+        if (!Array.isArray(parsed)) {
+            return new Error(`Unexpected response from '${url}'`);
+        }
+        const versions: string[] = [];
+        for (const item of parsed as unknown[]) {
+            if (!item || typeof item != 'object') continue;
+            if (!('tag_name' in item) || !('assets' in item)) continue;
+            if ('draft' in item && item.draft === true) continue;
+            const tag = item.tag_name;
+            if (typeof tag != 'string' || !tag.startsWith(BINARIES_RELEASE_TAG_PREFIX)) continue;
+            const assets = item.assets;
+            if (!Array.isArray(assets)) continue;
+            const hasAsset = assets.some(a => a != null && typeof a == 'object' &&
+                'name' in a && a.name === assetName);
+            if (!hasAsset) continue;
+            const version = tag.substring(BINARIES_RELEASE_TAG_PREFIX.length);
+            if (utility.isVersionString(version)) {
+                versions.push(version);
+            }
+        }
+        return versions;
+    } catch (error) {
+        return error as Error;
+    }
+}
+
+function latestVersionOfMajor(versions: string[], mainVersion: string): string | undefined {
+    let latest: string | undefined;
+    for (const ver of versions) {
+        if (ver.split('.')[0] != mainVersion) continue;
+        if (latest == undefined || utility.compareVersion(ver, latest) > 0) {
+            latest = ver;
+        }
+    }
+    return latest;
+}
+
 function checkBinFolder(binFolder: File): boolean {
     return binFolder.IsDir() &&
         File.fromArray([binFolder.path, 'VERSION']).IsFile();
@@ -962,67 +1026,28 @@ async function tryUpdateBinaries(binFolder: File, localVer?: string): Promise<bo
     const eideCfg = ResManager.GetInstance().getAppConfig<any>();
     const minReqVersion = eideCfg['binary_min_version'];
 
-    const getVersionFromRepo = async (): Promise<string | Error | undefined> => {
-        try {
-            const url = `https://api.github.com/repos/github0null/eide-resource/contents/binaries/${platform.getRuntimeId()}/VERSION`;
-            const cont = await utility.requestTxt(utility.redirectHost(url));
-            if (typeof cont != 'string') return cont;
-            let obj: any = undefined;
-            try { obj = JSON.parse(cont); } catch (error) { return error; }
-            if (typeof obj.content != 'string') return obj.content;
-            return Buffer.from(obj.content, 'base64').toString();
-        } catch (error) {
-            return error;
-        }
-    };
-
-    const getAvailableBinariesVersions = async (): Promise<string[] | Error | undefined> => {
-        try {
-            const url = `https://api.github.com/repos/github0null/eide-resource/contents/binaries/${platform.getRuntimeId()}`;
-            const fList = await utility.readGithubRepoFolder(utility.redirectHost(url));
-            if (fList instanceof Error) throw fList;
-            return fList.filter(f => f.name.startsWith('bin-'))
-                .map(f => f.name.replace('bin-', '').replace('.7z', ''))
-                .filter(vStr => utility.isVersionString(vStr));
-        } catch (error) {
-            return error;
-        }
-    };
+    const availableVersions = await getAvailableBinariesVersions();
+    if (availableVersions instanceof Error) {
+        GlobalEvent.log_warn(`Failed to fetch eide binaries releases: ${availableVersions.message}`);
+    }
+    const releaseVersions = availableVersions instanceof Error ? [] : availableVersions;
 
     let preinstallVersion: string | undefined;
 
     // compare version if local version is available
     if (localVer) {
-        const newVersion = await getVersionFromRepo();
-        if (typeof newVersion == 'string') {
-            const remotVer = newVersion.trim();
-            if (utility.isVersionString(remotVer)) {
-                const localMainVer: string = localVer.split('.')[0];
-                const remotMainVer: string = remotVer.split('.')[0];
-                if (localMainVer == remotMainVer && // main version number must be equal
-                    utility.compareVersion(remotVer, localVer) > 0) { // remote version > local version ?
-                    preinstallVersion = remotVer; // local binaries need update
-                }
-            }
+        const localMainVer: string = localVer.split('.')[0];
+        const remoteVersion = latestVersionOfMajor(releaseVersions, localMainVer);
+        if (remoteVersion && utility.compareVersion(remoteVersion, localVer) > 0) { // remote version > local version ?
+            preinstallVersion = remoteVersion; // local binaries need update
         }
     }
 
-    // can not match version, get version list from repo
-    // select the latest version for min version requirment
+    // binaries is not installed, select the latest version that satisfies
+    // the minimum requirement
     else {
-        const vList = await getAvailableBinariesVersions();
-        if (vList && Array.isArray(vList)) {
-            const minMainVer: string = minReqVersion.split('.')[0];
-            const validVerList = vList.filter(ver => ver.split('.')[0] == minMainVer);
-            if (validVerList.length > 0) {
-                preinstallVersion = validVerList[0];
-                for (const ver of validVerList) {
-                    if (utility.compareVersion(ver, preinstallVersion) > 0) {
-                        preinstallVersion = ver;
-                    }
-                }
-            }
-        }
+        const minMainVer: string = minReqVersion.split('.')[0];
+        preinstallVersion = latestVersionOfMajor(releaseVersions, minMainVer);
     }
 
     // check version
@@ -1032,21 +1057,10 @@ async function tryUpdateBinaries(binFolder: File, localVer?: string): Promise<bo
         }
     } else { // binaries is not installed
         if (preinstallVersion == undefined) {
-            const err = new Error(`Can not fetch binaries version from remote github repo (binaries minimum version required: '${minReqVersion}'), Check your network and retry !`);
+            const err = new Error(`Can not fetch eide binaries version from '${BINARIES_RELEASE_REPO}' releases (binaries minimum version required: '${minReqVersion}'), Check your network and retry !`);
             GlobalEvent.emit('error', err);
             return false;
         }
-    }
-
-    // check bin folder
-    // show notify to user and request a confirm
-    if (checkBinFolder(binFolder) && preinstallVersion) {
-        //TODO
-        // if (!notConfirm) {
-        //     const msg = `New update for eide binaries, version: '${preinstallVersion}', [ChangeLog](https://github.com/github0null/eide-resource/pulls?q=is%3Apr+is%3Aclosed), install now ?`;
-        //     const sel = await vscode.window.showInformationMessage(msg, 'Yes', 'Later');
-        //     if (sel != 'Yes') { return true; } // user canceled
-        // }
     }
 
     return await tryInstallBinaries(binFolder, preinstallVersion);
@@ -1055,20 +1069,11 @@ async function tryUpdateBinaries(binFolder: File, localVer?: string): Promise<bo
 async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<boolean> {
 
     // zip type
-    const binType = '7z';
+    const binType = BINARIES_ASSET_EXT;
 
-    // binaries download site
-    let downloadSites: string[] = [
-        `https://raw-github.em-ide.com/github0null/eide-resource/master/binaries/${platform.getRuntimeId()}/bin-${binVersion}.${binType}`,
-        `https://raw.githubusercontent.com/github0null/eide-resource/master/binaries/${platform.getRuntimeId()}/bin-${binVersion}.${binType}`
-    ];
-
-    // random order
-    {
-        const sValMap: Map<string, number> = new Map();
-        downloadSites.forEach(s => sValMap.set(s, Math.floor(Math.random() * 100)));
-        downloadSites = downloadSites.sort((a, b) => (sValMap.get(a) || 0) - (sValMap.get(b) || 0));
-    }
+    // release asset of this repository: releases/download/binaries/<version>/bin-<runtimeId>.7z
+    const downloadUrl = utility.redirectHost(
+        `https://github.com/${BINARIES_RELEASE_REPO}/releases/download/${BINARIES_RELEASE_TAG_PREFIX}${binVersion}/bin-${platform.getRuntimeId()}.${binType}`);
 
     let installedDone = false;
 
@@ -1079,27 +1084,18 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
             location: vscode.ProgressLocation.Notification,
             title: 'Downloading eide binaries',
             cancellable: false
-        }, async (progress, token): Promise<boolean> => {
+        }, async (progress): Promise<boolean> => {
 
-            let res: Buffer | undefined | Error = undefined;
-
-            for (const site of downloadSites) {
-                res = await utility.downloadFileWithProgress(site, tmpFile.name, progress, token);
-                if (res instanceof Buffer) { break; } /* if done, exit loop */
-                progress.report({ message: 'failed, switch to next download site ...' });
-            }
-
-            if (res instanceof Error) { /* download failed */
-                GlobalEvent.emit('msg', ExceptionToMessage(res, 'Warning'));
-                return false;
-            } else if (res == undefined) { /* canceled */
+            try {
+                await downloadHttpsFile(downloadUrl, tmpFile.path, (received, total) => {
+                    const percent = total > 0 ? `${(received * 100 / total).toFixed(1)}% of ` : '';
+                    progress.report({ message: `${percent}'${tmpFile.name}'` });
+                });
+                return true;
+            } catch (error) {
+                GlobalEvent.emit('msg', ExceptionToMessage(error, 'Warning'));
                 return false;
             }
-
-            /* save to file */
-            fs.writeFileSync(tmpFile.path, res);
-
-            return true;
         });
 
         /* download done, unzip and install it */

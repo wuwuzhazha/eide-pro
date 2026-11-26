@@ -49,6 +49,47 @@ The tag push starts `.github/workflows/release.yml`.
 - The same VSIX published to Open VSX under the `wuwuzhazha` publisher:
   https://open-vsx.org/extension/wuwuzhazha/eide-pro
 
+## Binaries payloads
+
+The extension downloads its runtime payloads (`~/.eide/bin`) from releases
+tagged `binaries/<version>`, not from `github0null/eide-resource`. Each such
+release carries one asset per runtime id:
+
+```
+bin-win32.7z
+bin-linux-x86_64.7z
+bin-linux-arm64.7z
+bin-osx-x86_64.7z
+bin-osx-arm64.7z
+```
+
+The extension lists `https://api.github.com/repos/wuwuzhazha/eide-pro/releases`,
+keeps the `binaries/` tags whose release has the asset for the current runtime,
+and installs the highest version matching the major version in
+`res/data/config.yaml` (`binary_min_version`). Raising that major version forces
+every existing install to migrate on the next start.
+
+Build the payloads with the bundled `7za`; the script downloads the upstream
+eide-resource archives, prunes them to what the extension actually calls, and
+self-checks the result (win32 runs `bash -c 'echo ok && /bin/tar --version'`
+from the extracted payload):
+
+```bash
+node scripts/build-binaries-payload.js all --out <dir> --version 13.0.0
+```
+
+`win32` keeps only `builder/msys/{bin,etc}` (bash, tar, the MSYS runtime DLLs
+and the shell builtins), `utils/stvp_tools`, `include/internal_headers` and
+`VERSION`. The other platforms keep only `include/internal_headers` and
+`VERSION`, because they use the system shell.
+
+Publish by creating a release with tag `binaries/<version>` and uploading the
+five assets:
+
+```bash
+gh release create binaries/13.0.0 <dir>/bin-*.7z --title "binaries 13.0.0"
+```
+
 ## Rerun a failed release
 
 Open Actions → Release, select the failed run for the tag, and choose

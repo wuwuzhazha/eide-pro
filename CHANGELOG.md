@@ -13,8 +13,11 @@ All notable version changes will be recorded in this file.
   - The `EIDE_PY3_CMD` builtin variable is removed. If a shell task references `${EIDE_PY3_CMD}` or `~/.eide/bin/python36`, point it at your own python installation instead.
   - An existing `~/.eide/bin/python36` directory is left untouched and only logged at startup, so shell tasks that still call it keep working.
   - The serial monitor is unaffected: it is the native `serial_monitor` binary, not a python script.
+  - EIDE binaries are downloaded from `binaries/<version>` releases of this repository instead of `github0null/eide-resource`. `binary_min_version` is now `13.0.0`, so every existing install downloads the new payload once.
+  - The Windows payload only ships the MSYS `bash`/`tar` tool set plus the STVP tools; the full MSYS environment is no longer distributed. Shell tasks that call other MSYS tools (make, perl, ...) need a local MSYS2 installation.
 
 **New**:
+  - `scripts/build-binaries-payload.js` builds the reduced payloads reproducibly and self-checks them: the win32 payload drops from ~30 MB to ~7 MB compressed, and the linux/osx payloads are ~9 KB.
   - Added an extension prompt that offers to install the separate `eide-cli` / `eide-mcp` package, with `EIDE.Tooling.PromptInstall`, prerequisite checks, retries for transient downloads, and Windows npm-shim handling.
   - Added `eide-cli --version` / `-v` for tooling detection.
   - The headless package now includes the MCP skill at `skills/eide-mcp-tools/SKILL.md`; `eide-mcp --print-skill` prints it from an installed package.
