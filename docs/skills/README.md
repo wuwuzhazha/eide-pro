@@ -73,11 +73,14 @@ Expected frontmatter:
 ```yaml
 ---
 name: eide-mcp-tools
-version: 4.3.0
+version: <release-version>
 description: >-
   Operate EIDE Pro embedded MCU projects through MCP tools...
 ---
 ```
+
+Treat the exact value shown by `eide-mcp --print-skill` as authoritative; the
+snippet above is a placeholder.
 
 ## Keep it current
 
