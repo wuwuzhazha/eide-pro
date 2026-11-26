@@ -50,8 +50,11 @@ export async function installBinaries(
 }
 
 export function cleanupStaleStaging(parent: string): void {
+    if (!fs.existsSync(parent)) {
+        return;
+    }
     for (const entry of fs.readdirSync(parent)) {
-        if (!entry.startsWith('.binaries-install-')) {
+        if (!entry.startsWith('.binaries-install-') && !entry.startsWith('.binaries-backup-')) {
             continue;
         }
         const path = NodePath.join(parent, entry);

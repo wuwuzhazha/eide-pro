@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as NodePath from 'path';
 
-const { installBinaries } = require('../../../src/core/binaries_install');
+const { installBinaries, cleanupStaleStaging } = require('../../../src/core/binaries_install');
 
 function assert(condition: boolean, message: string): void {
     if (!condition) {
@@ -39,6 +39,24 @@ function tempRoot(): string {
 }
 
 async function run(): Promise<void> {
+    {
+        const root = tempRoot();
+        const missingParent = NodePath.join(root, 'missing');
+        cleanupStaleStaging(missingParent);
+        assert(!fs.existsSync(missingParent), 'cleanup: missing parent is a no-op without throwing');
+    }
+
+    {
+        const root = tempRoot();
+        fs.mkdirSync(NodePath.join(root, '.binaries-install-old'), { recursive: true });
+        fs.mkdirSync(NodePath.join(root, '.binaries-backup-old'), { recursive: true });
+        fs.writeFileSync(NodePath.join(root, 'keep.txt'), 'keep');
+        cleanupStaleStaging(root);
+        const remaining = fs.readdirSync(root);
+        assert(remaining.length === 1 && remaining[0] === 'keep.txt',
+            `cleanup: removes install and backup leftovers (${JSON.stringify(remaining)})`);
+    }
+
     {
         const root = tempRoot();
         const target = NodePath.join(root, 'bin');
