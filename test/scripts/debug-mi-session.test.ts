@@ -907,6 +907,20 @@ async function testResolveAddress(): Promise<void> {
     assert(ramFailure.message.includes('0x20000000'), 'resolve RAM error names the address');
     await ramHarness.session.disconnect();
 
+    const invalidAddressHarness = createHarness(standardResponse);
+    await invalidAddressHarness.session.connect('localhost:3333');
+    const writtenBefore = invalidAddressHarness.fake.written.length;
+    for (const invalid of [-1, Number.NaN, 1.5, BigInt(-1), BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1)]) {
+        const failure = await captureReject(
+            invalidAddressHarness.session.resolveAddress(invalid),
+            `resolve invalid address ${String(invalid)}`,
+        );
+        assertEqual(failure.code, 'state', `invalid address ${String(invalid)} code`);
+    }
+    assertEqual(invalidAddressHarness.fake.written.length, writtenBefore,
+        'invalid addresses send no MI command');
+    await invalidAddressHarness.session.disconnect();
+
     const noSourceHarness = createHarness((command, token) => {
         if (command.startsWith('-data-disassemble -s 0x8000100 -e 0x8000101 -- 5')) {
             return `${token}^done,asm_insns=[{address="0x08000100",func-name="bare",offset="0",opcodes="00 bf",inst="nop"}]\n(gdb) \n`;

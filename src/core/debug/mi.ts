@@ -780,9 +780,12 @@ export class MiSession {
     }
 
     async resolveAddress(address: MiAddress): Promise<MiSourceLocation> {
-        const numericAddress = Number(address) >>> 0;
-        const normalizedAddress = formatMiAddress(numericAddress);
-        const endAddress = formatMiAddress(numericAddress + 1);
+        const normalizedAddress = formatMiAddress(address);
+        const endAddress = formatMiAddress(BigInt(address) + BigInt(1));
+        const numericAddress = Number(address);
+        if (!Number.isSafeInteger(numericAddress)) {
+            throw new MiError('state', `address exceeds the safe integer range: ${normalizedAddress}`);
+        }
         const record = await this.runCommand(
             `-data-disassemble -s ${normalizedAddress} -e ${endAddress} -- 5`,
             ['done'],
