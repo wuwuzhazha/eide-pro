@@ -103,8 +103,8 @@
     "eide.deps.macro.show": "显示所有宏定义",
     "eide.deps.macro.add": "添加宏定义",
 
-    "settings.mcp.server.enable": "是否启用内置的MCP服务，用于增强AI与EIDE之间的交互。启用后需要重启VSCode以使设置生效",
-    "settings.mcp.server.port": "MCP服务的端口号",
+    "settings.mcp.server.enable": "是否启用内置的MCP服务，用于增强AI与EIDE之间的交互。修改后立即生效，服务自动重启，无需重启VSCode",
+    "settings.mcp.server.port": "MCP服务的端口号。修改后立即生效，服务自动重启，无需重启VSCode",
 
     "settings.tooling.prompt_install": "启动时若缺少 `eide-cli` / `eide-mcp` 包，是否提示安装。它们是给脚本与 AI 用的独立工具包，扩展本身不包含。关闭后完全不检测、不提示。",
 
