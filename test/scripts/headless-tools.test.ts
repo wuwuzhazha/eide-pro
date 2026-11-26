@@ -193,7 +193,7 @@ async function run(): Promise<void> {
     result = await execute('eide_add_src_dir', { uid: 'project-uid', path: 'hal' });
     assert(result.isError !== true, 'headless: add source dir');
     data = parse(await execute('eide_get_src_dirs', { uid: 'project-uid' }));
-    assert(data.join('|') === 'src|hal', 'headless: source dirs list');
+    assert(data.items.join('|') === 'src|hal', 'headless: source dirs list');
     result = await execute('eide_del_src_dir', { uid: 'project-uid', path: 'hal' });
     assert(result.isError !== true, 'headless: remove source dir');
 
@@ -209,12 +209,12 @@ async function run(): Promise<void> {
     result = await execute('eide_set_inc_dirs', { uid: 'project-uid', paths: ['inc'] });
     assert(result.isError !== true, 'headless: set include dirs');
     data = parse(await execute('eide_get_inc_dirs', { uid: 'project-uid' }));
-    assert(data.join('|') === 'inc', 'headless: include dirs list');
+    assert(data.items.join('|') === 'inc', 'headless: include dirs list');
 
     result = await execute('eide_set_defines', { uid: 'project-uid', defines: ['A=1', ' A=1 ', 'B=2'] });
     assert(result.isError !== true, 'headless: set defines');
     data = parse(await execute('eide_get_defines', { uid: 'project-uid' }));
-    assert(data.join('|') === 'A=1|B=2', 'headless: defines list');
+    assert(data.items.join('|') === 'A=1|B=2', 'headless: defines list');
 
     result = await execute('eide_get_builder_opts_schema', { uid: 'project-uid' });
     const schemaTop = parse(result);

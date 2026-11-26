@@ -291,13 +291,13 @@ async function run(): Promise<void> {
     assert(data.id === 1 && data.functionName === 'main', 'headless debug: set breakpoint');
 
     data = parse(await execute('eide_debug_backtrace', { uid: 'debug-uid' }));
-    assert(Array.isArray(data) && data.length === 3, 'headless debug: backtrace returns frames');
-    assert(data[0].functionName === 'main' && data[0].line === 10,
+    assert(Array.isArray(data.items) && data.items.length === 3, 'headless debug: backtrace returns frames');
+    assert(data.items[0].functionName === 'main' && data.items[0].line === 10,
         'headless debug: backtrace frame fields');
-    assert(data[2].functionName === undefined, 'headless debug: backtrace optional fields');
+    assert(data.items[2].functionName === undefined, 'headless debug: backtrace optional fields');
 
     data = parse(await execute('eide_debug_backtrace', { uid: 'debug-uid', maxDepth: 1 }));
-    assert(data.length === 1 && data[0].level === 0, 'headless debug: backtrace maxDepth');
+    assert(data.items.length === 1 && data.items[0].level === 0, 'headless debug: backtrace maxDepth');
     result = await execute('eide_debug_backtrace', { uid: 'debug-uid', maxDepth: 0 });
     assert(result.isError === true && result.content[0].text.includes('maxDepth'),
         'headless debug: backtrace rejects maxDepth 0');
@@ -314,10 +314,10 @@ async function run(): Promise<void> {
     malformed = 'none';
 
     data = parse(await execute('eide_debug_list_breakpoints', { uid: 'debug-uid' }));
-    assert(Array.isArray(data) && data.length === 2, 'headless debug: list breakpoints');
-    assert(data[0].id === 1 && data[0].enabled === true && data[0].hitCount === 2,
+    assert(Array.isArray(data.items) && data.items.length === 2, 'headless debug: list breakpoints');
+    assert(data.items[0].id === 1 && data.items[0].enabled === true && data.items[0].hitCount === 2,
         'headless debug: breakpoint list fields');
-    assert(data[1].enabled === false && data[1].address === undefined,
+    assert(data.items[1].enabled === false && data.items[1].address === undefined,
         'headless debug: pending breakpoint list fields');
     malformed = 'breakpoints';
     result = await execute('eide_debug_list_breakpoints', { uid: 'debug-uid' });

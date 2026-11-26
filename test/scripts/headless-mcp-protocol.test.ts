@@ -137,13 +137,13 @@ async function run(): Promise<void> {
             name: 'eide_get_defines',
             arguments: { uid: 'protocol-uid' }
         });
-        assert(parse(result).join('|') === 'A=1|B=2', 'protocol: get defines');
+        assert(parse(result).items.join('|') === 'A=1|B=2', 'protocol: get defines');
 
         result = await client.callTool({
             name: 'eide_get_src_dirs',
             arguments: { uid: 'protocol-uid' }
         });
-        assert(parse(result).join('|') === 'src', 'protocol: get source dirs');
+        assert(parse(result).items.join('|') === 'src', 'protocol: get source dirs');
 
         result = await client.callTool({
             name: 'eide_clean',

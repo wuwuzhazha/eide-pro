@@ -83,7 +83,8 @@ Useful headless options: repeatable `--project`, `--target`, `--settings`
 
 Every tool result provides the JSON payload twice: as `structuredContent`
 (preferred) and as the same JSON in `content[0].text`. Prefer
-`structuredContent`; treat `isError: true` as failure.
+`structuredContent`; treat `isError: true` as failure. `structuredContent` is
+always a JSON object: tools that answer a list wrap it as `{ "items": [...] }`.
 
 ## 2. Rules that prevent most failures
 
@@ -139,9 +140,14 @@ eide_flash(uid, eraseAll=false) → only after a successful build
 
 Headless flash accepts `artifact` (one or more `path[,address]` entries
 separated by `;`), `verify`, and `dryRun`. `dryRun=true` returns
-`{ uploader, command, request }` without touching hardware but still requires
-the configured flasher executable. `artifact` cannot be combined with
-`eraseAll=true`.
+`{ success, dryRun: true, uploader, invocation, verify, eraseAll, programs }`
+without touching hardware (`invocation` holds the planned `executable`, `args`,
+and command `script`) but still requires the configured flasher executable.
+`artifact` cannot be combined with `eraseAll=true`. In VS Code mode a dry-run
+returns the same plan when it can be constructed, plus `command` rendered as a
+single command line; when the uploader is not supported by the plan layer or the
+flash configuration is incomplete, the result still stays off the hardware and
+explains itself in `planningError`.
 
 A non-dry-run build returns JSON with `success`, `buildId`, `configHash`,
 `stage`, `problems`, `memory`, `artifacts`, `compileCommands` (when
@@ -212,14 +218,14 @@ All of these require `uid`.
 | `eide_get_targets` | — | `{ actived, targets }` |
 | `eide_get_environment` | `target?` | Resolved tool paths with their `source` and the `searched` evidence chain |
 | `eide_switch_target` | `targetName` | Select active target |
-| `eide_get_src_dirs` | — | Source root list |
+| `eide_get_src_dirs` | — | `{ items }`: source root list |
 | `eide_add_src_dir` | `path` | Add a source root |
 | `eide_del_src_dir` | `path` | Remove a source root |
 | `eide_exclude_src_file` | `path` | Add file to target exclude list |
 | `eide_include_src_file` | `path` | Remove file from exclude list |
-| `eide_get_inc_dirs` | — | Target `cppPreprocessAttrs.incList` |
+| `eide_get_inc_dirs` | — | `{ items }`: target `cppPreprocessAttrs.incList` |
 | `eide_set_inc_dirs` | `paths[]` | Replace target include list |
-| `eide_get_defines` | — | Target `cppPreprocessAttrs.defineList` |
+| `eide_get_defines` | — | `{ items }`: target `cppPreprocessAttrs.defineList` |
 | `eide_set_defines` | `defines[]` | Replace target define list |
 | `eide_get_builder_opts_schema` | `path?` | Schema subtree for `path`; without `path`, only top-level keys with descriptions |
 | `eide_get_builder_opts` | — | Current toolchain options |
@@ -284,10 +290,10 @@ Build the project before connecting; the default ELF is
 
 Addresses accept a number or a `0x`-prefixed string. `eide_debug_fault` reads
 HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.
-`eide_debug_backtrace` returns frames with level, address, and optional
-function/file/line/fullname. `eide_debug_list_breakpoints` returns breakpoint
-type, enabled state, address, source location, condition, hit count, and nested
-locations for multi-location breakpoints. `eide_debug_list_threads` returns
+`eide_debug_backtrace` returns `{ items }` with frames carrying level, address,
+and optional function/file/line/fullname. `eide_debug_list_breakpoints` returns
+`{ items }` with breakpoint type, enabled state, address, source location,
+condition, hit count, and nested locations for multi-location breakpoints. `eide_debug_list_threads` returns
 `threads` and `currentThreadId`; `eide_debug_list_variables` returns local
 variables and arguments for the selected thread/frame, and a `frameLevel`
 argument requires the matching `threadId`. The step
@@ -332,7 +338,7 @@ eide_debug_disconnect(uid)
 ### Change a define and rebuild
 
 ```text
-1. eide_get_defines(uid)
+1. eide_get_defines(uid) → read the `items` array
 2. eide_set_defines(uid, [...existing, "FEATURE=1"])
 3. eide_rebuild(uid)
 ```
@@ -340,7 +346,7 @@ eide_debug_disconnect(uid)
 ### Add an include directory
 
 ```text
-1. eide_get_inc_dirs(uid)
+1. eide_get_inc_dirs(uid) → read the `items` array
 2. eide_set_inc_dirs(uid, [...existing, "vendor/inc"])
 3. eide_build(uid)
 ```

@@ -44,13 +44,15 @@ export interface HeadlessToolOptions {
 }
 
 function makeToolResult(data: unknown, isError = false): CallToolResult {
-    const envelope = data && typeof data === 'object' && 'success' in data
-        ? data as Record<string, unknown>
-        : { value: data };
+    const envelope: Record<string, unknown> = Array.isArray(data)
+        ? { items: data }
+        : data && typeof data === 'object'
+            ? data as Record<string, unknown>
+            : { value: data };
     return {
         isError: envelope.success === false ? true : isError,
         structuredContent: envelope,
-        content: [{ type: 'text', text: JSON.stringify(data) }]
+        content: [{ type: 'text', text: JSON.stringify(envelope) }]
     };
 }
 

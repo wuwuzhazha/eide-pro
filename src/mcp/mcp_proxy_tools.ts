@@ -127,13 +127,13 @@ export function createMcpServer(
             inputSchema: {
                 uid: uidSchema,
                 eraseAll: z.boolean().describe('Determine whether to perform a chip erase of the mcu.'),
+                dryRun: z.boolean().optional().describe(
+                    'Build the flash command and return it without programming the device.'),
                 ...(options.headless ? {
                     artifact: z.string().optional().describe(
                         "Flash artifact override: one or more 'path[,address]' entries separated by ';'."),
                     verify: z.boolean().optional().describe(
-                        'Verify the programmed image. Omitted uses the flash tool default.'),
-                    dryRun: z.boolean().optional().describe(
-                        'Build the flash command and return it without programming the device.')
+                        'Verify the programmed image. Omitted uses the flash tool default.')
                 } : {})
             }
         },

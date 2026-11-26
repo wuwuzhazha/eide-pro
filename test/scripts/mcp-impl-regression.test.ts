@@ -115,8 +115,8 @@ function seedBuildInDep(prj: any): void {
 }
 
 async function checkReadWriteSymmetry(prj: any, uid: string, explorer: any): Promise<void> {
-    const incBefore = payload(await executeTool('eide_get_inc_dirs', { uid }, explorer));
-    const defBefore = payload(await executeTool('eide_get_defines', { uid }, explorer));
+    const incBefore = payload(await executeTool('eide_get_inc_dirs', { uid }, explorer)).items;
+    const defBefore = payload(await executeTool('eide_get_defines', { uid }, explorer)).items;
     const depBefore = depSnapshot(prj);
 
     check(incBefore.length === 2 && !incBefore.includes('include/toolchain'),
@@ -127,8 +127,8 @@ async function checkReadWriteSymmetry(prj: any, uid: string, explorer: any): Pro
     await executeTool('eide_set_inc_dirs', { uid, paths: incBefore }, explorer);
     await executeTool('eide_set_defines', { uid, defines: defBefore }, explorer);
 
-    const incAfter = payload(await executeTool('eide_get_inc_dirs', { uid }, explorer));
-    const defAfter = payload(await executeTool('eide_get_defines', { uid }, explorer));
+    const incAfter = payload(await executeTool('eide_get_inc_dirs', { uid }, explorer)).items;
+    const defAfter = payload(await executeTool('eide_get_defines', { uid }, explorer)).items;
     const depAfter = depSnapshot(prj);
 
     checkDeepEqual(incAfter, incBefore, 'get -> set -> get keeps inc dirs identical');

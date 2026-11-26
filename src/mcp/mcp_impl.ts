@@ -22,6 +22,7 @@
     SOFTWARE.
 */
 
+import * as NodePath from 'path';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types';
 import { ProjectExplorer } from '../EIDEProjectExplorer';
 import { AbstractProject } from '../EIDEProject';
@@ -36,6 +37,12 @@ import { BuildProblem, detectBuildStage, makeLogTail, parseMemoryUsage, toBuildP
 import { BuildStatistics, queryCallgraph, summarizeStackUsage } from '../BuildStatistics';
 import { validateBuildOverrides } from '../core/build_overrides';
 import { BuildOverrides } from '../core/types';
+import { createCommandKernel } from '../core/command_kernel';
+import { NodeProcessRunner } from '../core/process_runner';
+import { resolveToolchainEnvironment } from '../core/toolchain_env';
+import { TOOLCHAIN_SETTING_KEYS } from '../core/toolchain_setting_keys';
+import { SettingManager } from '../SettingManager';
+import { ResManager } from '../ResManager';
 
 function resolveProject(
     explorer: ProjectExplorer,
@@ -89,6 +96,57 @@ function unsupportedDebugTransport(): CallToolResult {
 function readCustomDependence(prj: AbstractProject) {
     return prj.GetConfiguration().GetDependence(
         ProjectConfiguration.CUSTOM_GROUP_NAME, 'default');
+}
+
+function extensionFlasherExecutable(uploader: string): string | undefined {
+    const settings = SettingManager.instance();
+    switch (uploader) {
+        case 'JLink':
+            return settings.getJlinkExePath();
+        case 'OpenOCD': {
+            const exe = settings.getOpenOCDExePath();
+            return exe !== 'null' && !exe.startsWith('<') ? exe : undefined;
+        }
+        case 'STLink': {
+            const exe = settings.getSTLinkExePath();
+            return exe !== 'null' ? exe : undefined;
+        }
+        default:
+            return undefined;
+    }
+}
+
+async function planExtensionFlash(prj: AbstractProject, eraseAll: boolean): Promise<CallToolResult> {
+    const config = prj.GetConfiguration().config;
+    const kernel = createCommandKernel({ runner: new NodeProcessRunner() });
+    const result = await kernel.flash({
+        command: 'flash',
+        projectPath: prj.GetRootDir().path,
+        target: prj.getCurrentTarget(),
+        flasherExecutable: extensionFlasherExecutable(config.uploader),
+        eraseAll,
+        dryRun: true
+    });
+    if (result.success) {
+        const data: Record<string, unknown> = { ...result };
+        const invocation = data.invocation as { executable?: string; args?: string[] } | undefined;
+        return makeJsonResult({
+            ...data,
+            command: invocation
+                ? [invocation.executable, ...(invocation.args ?? [])].join(' ')
+                : config.uploader + ' flash'
+        });
+    }
+    const reason = result.error?.message ?? 'unknown error';
+    return makeJsonResult({
+        success: true,
+        dryRun: true,
+        uploader: config.uploader,
+        eraseAll,
+        planningError: reason,
+        command: `${config.uploader} flash for target '${prj.getCurrentTarget()}'` +
+            (eraseAll ? ' with chip erase' : '')
+    });
 }
 
 export function makeBuildResult(
@@ -231,6 +289,9 @@ export async function executeTool(
             if (!prj)
                 return projectNotFound(uid);
             const eraseAll = Boolean(args.eraseAll);
+            if (args.dryRun === true) {
+                return planExtensionFlash(prj, eraseAll);
+            }
             let res: FlashCommandResult | void;
             if (eraseAll) {
                 res = await explorer.programFlashProject(prj, true, true);
@@ -297,7 +358,7 @@ export async function executeTool(
                 return projectNotFound(uid);
             const srcList = prj.getNormalSourceManager()
                 .getRootFolderList().map(info => prj.toRelativePath(info.fileWatcher.file.path));
-            return makeJsonResult(srcList);
+            return makeJsonResult({ items: srcList });
         }
         case 'eide_exclude_src_file': {
             const prj = resolveProject(explorer, uid);
@@ -324,7 +385,7 @@ export async function executeTool(
                 const rel = prj.toRelativePath(p);
                 return rel !== undefined ? rel : p;
             });
-            return makeJsonResult(incList);
+            return makeJsonResult({ items: incList });
         }
         case 'eide_set_inc_dirs': {
             const prj = resolveProject(explorer, uid);
@@ -344,7 +405,7 @@ export async function executeTool(
             if (!prj)
                 return projectNotFound(uid);
             const dep = readCustomDependence(prj);
-            return makeJsonResult(dep ? dep.defineList : []);
+            return makeJsonResult({ items: dep ? dep.defineList : [] });
         }
         case 'eide_set_defines': {
             const prj = resolveProject(explorer, uid);
@@ -387,6 +448,44 @@ export async function executeTool(
                 actived: prj.getCurrentTarget(),
                 targets: prj.getTargets()
             });
+        }
+        case 'eide_get_environment': {
+            const prj = resolveProject(explorer, uid);
+            if (!prj)
+                return projectNotFound(uid);
+            if (args.target !== undefined
+                && (typeof args.target !== 'string' || args.target.trim().length === 0)) {
+                return makeTextResult(false, `'target' must be a non-empty string.`);
+            }
+            const config = prj.GetConfiguration().config;
+            const targetName = args.target as string | undefined ?? prj.getCurrentTarget();
+            const targetConfig = config.targets[targetName];
+            if (!targetConfig) {
+                return makeTextResult(false,
+                    `Target '${targetName}' not found. Available: ${Object.keys(config.targets).join(', ')}`);
+            }
+            const settings: { [key: string]: unknown } = {};
+            const configuration = SettingManager.instance().getConfiguration();
+            for (const key of Object.values(TOOLCHAIN_SETTING_KEYS)) {
+                const value = configuration.get<string>(key);
+                if (typeof value === 'string' && value.trim().length > 0) {
+                    settings[key] = value;
+                }
+            }
+            try {
+                const report = resolveToolchainEnvironment({
+                    projectPath: prj.GetRootDir().path,
+                    target: targetName,
+                    type: String(config.type || ''),
+                    toolchain: String(targetConfig.toolchain || ''),
+                    settings,
+                    resourcesDir: NodePath.join(ResManager.instance().getAppRootFolder().path, 'res')
+                });
+                return makeJsonResult(report);
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                return makeTextResult(false, 'Failed to resolve toolchain environment.', error);
+            }
         }
         case 'eide_set_builder_opts': {
             const prj = resolveProject(explorer, uid);

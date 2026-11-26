@@ -183,7 +183,7 @@ Build results contain `success`, `buildId` (unique per build), `configHash`,
 `<outDir>/<target>/build-manifest.json`. The compiler database can be fed
 directly to clangd or other language servers.
 
-A successful `flash --dry-run` returns `uploader`, `verify` (the verification that will run),
+A successful `flash --dry-run` returns `dryRun: true`, `uploader`, `verify` (the verification that will run),
 `eraseAll`, `programs`, and `invocation` — the command object with `executable`, `args`,
 and `script`. `command` carries only the command name.
 
@@ -288,7 +288,7 @@ is optional in tool arguments (it must still match that project when given);
 { "success": true, "stage": "link", "problems": [], "artifacts": [ … 4 entries … ] }
 
 // eide_flash { "uid": "headless-e2e", "dryRun": true, "eraseAll": false }
-{ "uploader": "JLink", "invocation": { "executable": "…/JLink.exe", "args": [ … ] } }
+{ "dryRun": true, "uploader": "JLink", "invocation": { "executable": "…/JLink.exe", "args": [ … ] } }
 ```
 
 When a build fails, `artifacts` is empty; do not flash.

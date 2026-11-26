@@ -76,6 +76,7 @@ export interface FlashCommandRequest extends ProjectCommandRequest {
 
 export interface FlashResultData {
     uploader: string;
+    dryRun?: boolean;
     invocation?: {
         executable: string;
         args: string[];
@@ -132,6 +133,7 @@ export function createCommandKernel(options: CommandKernelOptions): CommandKerne
                     return {
                         success: true,
                         command: 'flash',
+                        dryRun: true,
                         uploader: plan.uploader,
                         invocation: {
                             executable: plan.command.executable,
