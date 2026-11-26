@@ -65,6 +65,29 @@ incident record is dropped when memory fades.
      compilation rewriting `out/`. CI jobs are environment-isolated and
      unaffected.
 
+7. When a tool's output shape changes, sweep every consumer before
+   delivering: `git grep -n <tool_name> -- test scripts docs .github`, including
+   tests that only run in CI.
+   Incident: `eide_debug_backtrace` changed from a bare array to `{items}`; the
+   local suite passed, but `test/scripts/debug-qemu-session.test.ts` (runs only
+   in the headless-package CI job) still read the array and failed the first CI
+   round (`7266b1e`).
+
+8. Every argument an implementation reads must be declared in the input schema
+   of every transport that exposes the tool; the MCP SDK strips undeclared
+   fields before the handler sees them.
+   Incident: `eide_flash` read `dryRun`, but the non-headless schema did not
+   declare it, so the parameter was silently dropped and a dry run programmed
+   the device (found in field testing on a real project, fixed in 4.3.2).
+   Enforcement: an executable check is tracked by audit lane B, hypothesis H1.
+
+9. Audit findings carry a verbatim quote and, where cheap, an executed
+   command; "looks suspicious" without evidence is rejected.
+   Incident: unverified review claims cost the PM the same effort to refute as
+   the reviewer saved; "none found" conclusions on Keil import and memap
+   parsing were later disproved.
+   Protocol: `.tasks/audit/PROTOCOL.md` (local, not tracked).
+
 ## Checks
 
 Dispatch: `npm run check:task-card -- <card.md>` — validates the card's
