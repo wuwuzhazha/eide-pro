@@ -345,7 +345,9 @@ async function run(): Promise<void> {
         const demoRoot = NodePath.join(process.cwd(), 'examples', 'hardfault-demo');
         const demoMain = fs.readFileSync(NodePath.join(demoRoot, 'src', 'main.c'), 'utf8');
         const badCallLine = demoMain.split(/\r?\n/).findIndex((line: string) => line.trim() === 'sensor->on_event();') + 1;
+        const pollCallLine = demoMain.split(/\r?\n/).findIndex((line: string) => line.trim() === 'poll(&sensors[i]);') + 1;
         assert(badCallLine > 0, 'qemu fault: demo source contains the null callback call');
+        assert(pollCallLine > 0, 'qemu fault: demo source contains the poll call');
         session = await prepareQemuSession({ fixtureDir: demoRoot });
         try {
             const faultCall = session.call;
@@ -380,6 +382,23 @@ async function run(): Promise<void> {
             'qemu fault: caller location is poll in main.c');
             assert(Number(report.exception?.callerLocation?.line) === badCallLine,
                 'qemu fault: caller location is the null callback call line');
+
+            const backtrace = report.exception?.backtrace;
+            assert(backtrace?.from === 'callSite', 'qemu fault: backtrace starts at the call site');
+            assert(backtrace?.frames?.[0]?.functionName === 'poll'
+                && String(backtrace?.frames?.[0]?.file).endsWith('main.c')
+                && Number(backtrace?.frames?.[0]?.line) === badCallLine,
+            'qemu fault: backtrace frame 0 is the null callback call');
+            assert(backtrace?.frames?.[1]?.functionName === 'main'
+                && Number(backtrace?.frames?.[1]?.line) === pollCallLine,
+            'qemu fault: backtrace frame 1 is the caller of poll');
+
+            const restoredBacktrace = parse(await faultCall('eide_debug_backtrace'));
+            assert(restoredBacktrace.items?.[0]?.functionName === 'HardFault_Handler',
+                'qemu fault: registers are restored after diagnosis');
+            const repeatFault = parse(await faultCall('eide_debug_fault', {}));
+            assert(JSON.stringify(repeatFault.exception?.backtrace) === JSON.stringify(backtrace),
+                'qemu fault: repeated diagnosis yields the same backtrace');
             await faultCall('eide_debug_disconnect');
             console.log('QEMU FAULT DIAGNOSIS RAN');
         } finally {

@@ -6,6 +6,7 @@ import {
     decodeStackedFrame,
     selectFaultStack,
     STACKED_FRAME_WORDS,
+    stackPointerBeforeException,
 } from '../core/debug/fault';
 import {
     MiError,
@@ -302,16 +303,50 @@ export class HeadlessDebugSession {
         const callerAddress = frame.lr >>> 0 >= 0xffffffe0
             ? undefined
             : ((frame.lr & ~1) - 1) >>> 0;
+        const faultLocation = await resolve(pc);
+        const callerLocation = callerAddress === undefined
+            ? { address: frame.lr, error: 'stacked LR is an EXC_RETURN value, not a call site' }
+            : await resolve(callerAddress);
         report.exception = {
             stack,
             excReturn,
             stackPointer,
             frame,
-            faultLocation: await resolve(pc),
-            callerLocation: callerAddress === undefined
-                ? { address: frame.lr, error: 'stacked LR is an EXC_RETURN value, not a call site' }
-                : await resolve(callerAddress),
+            faultLocation,
+            callerLocation,
         };
+
+        const from = faultLocation.functionName !== undefined ? 'faultPc'
+            : callerAddress !== undefined ? 'callSite' : undefined;
+        if (from === undefined) {
+            report.exception.backtrace = { error: 'no resolvable fault context' };
+            return report;
+        }
+        const backtracePc = from === 'faultPc' ? pc : callerAddress!;
+        try {
+            await session.selectFrame(0);
+            const frames = await session.backtraceWithRegisters({
+                pc: backtracePc,
+                msp: stackPointerBeforeException(stackPointer, frame.xpsr),
+                lr: frame.lr
+            });
+            report.exception.backtrace = {
+                from,
+                frames: frames.map(frame => ({
+                    level: frame.level,
+                    address: frame.address,
+                    ...(frame.functionName !== undefined ? { functionName: frame.functionName } : {}),
+                    ...(frame.file !== undefined ? { file: frame.file } : {}),
+                    ...(frame.line !== undefined ? { line: frame.line } : {}),
+                }))
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (error instanceof MiError && message.startsWith('registers not restored')) {
+                throw error;
+            }
+            report.exception.backtrace = { from, error: message };
+        }
         return report;
     }
 

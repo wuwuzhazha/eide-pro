@@ -88,6 +88,8 @@ let faultRegisters: { lr: string; msp: string; psp: string } = {
     lr: '0x0', msp: '0x20004fc0', psp: '0x0'
 };
 let faultDisassemblyFails = false;
+let faultBacktraceMode: 'normal' | 'error' | 'restore-mismatch' = 'normal';
+let faultAssignments: string[] = [];
 
 const SCB_CONTENTS: { [address: string]: string } = {
     '0xe000ed2c': '00000040',
@@ -97,6 +99,7 @@ const SCB_CONTENTS: { [address: string]: string } = {
 };
 
 const STACKED_FRAME_CONTENTS = '0000000000000000000000209400000800000000870000089400000800000060';
+let stackedFrameContents = STACKED_FRAME_CONTENTS;
 
 function response(command: string, token: number): string | string[] | undefined {
     if (command.startsWith('-gdb-set ')) {
@@ -109,6 +112,9 @@ function response(command: string, token: number): string | string[] | undefined
         if (malformed === 'backtrace') {
             return `${token}^done,stack=[frame={level="x",addr="0x08000000"}]\n(gdb) \n`;
         }
+        if (faultBacktraceMode === 'error') {
+            return `${token}^error,msg="backtrace failed"\n`;
+        }
         return `${token}^done,stack=[frame={level="0",addr="0x08000000",func="main",file="main.c",fullname="C:\\\\fw\\\\main.c",line="10"},frame={level="1",addr="0x08000100",func="tick",file="main.c",line="20"},frame={level="2",addr="0x08000200"}]\n(gdb) \n`;
     }
     if (command === '-break-list') {
@@ -118,7 +124,19 @@ function response(command: string, token: number): string | string[] | undefined
         return `${token}^done,BreakpointTable={nr_rows="2",nr_cols="6",hdr=[],body=[bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x08000000",func="main",file="main.c",line="10",times="2"},bkpt={number="2",type="breakpoint",disp="keep",enabled="n",addr="<PENDING>",times="0"}]}\n(gdb) \n`;
     }
     if (command.startsWith('-data-evaluate-expression ')) {
-        const expression = /^"\$(\w+)"$/.exec(command.slice('-data-evaluate-expression '.length));
+        const rawExpression = command.slice('-data-evaluate-expression '.length);
+        const assignment = /^"\$(\w+)=(\d+)"$/.exec(rawExpression);
+        if (assignment) {
+            const name = assignment[1];
+            faultAssignments.push(`${name}=${assignment[2]}`);
+            if (faultBacktraceMode === 'restore-mismatch' && name === 'msp') {
+                faultRegisters.msp = '0x99999999';
+            } else if (name in faultRegisters) {
+                (faultRegisters as any)[name] = `0x${Number(assignment[2]).toString(16)}`;
+            }
+            return `${token}^done,value="${assignment[2]}"\n`;
+        }
+        const expression = /^"\$(\w+)"$/.exec(rawExpression);
         if (expression) {
             const values: { [name: string]: string } = {
                 r0: '0x1234', lr: faultRegisters.lr, msp: faultRegisters.msp, psp: faultRegisters.psp
@@ -142,10 +160,10 @@ function response(command: string, token: number): string | string[] | undefined
     if (command.startsWith('-data-read-memory-bytes ')) {
         const match = /^-data-read-memory-bytes (0x[0-9a-f]+) 32$/.exec(command);
         if (match && match[1] === faultRegisters.msp && faultRegisters.lr !== '0x0') {
-            return `${token}^done,memory=[{offset="0x0",contents="${STACKED_FRAME_CONTENTS}"}]\n(gdb) \n`;
+            return `${token}^done,memory=[{offset="0x0",contents="${stackedFrameContents}"}]\n(gdb) \n`;
         }
         if (match && match[1] === faultRegisters.psp && faultRegisters.lr === '0xfffffffd') {
-            return `${token}^done,memory=[{offset="0x0",contents="${STACKED_FRAME_CONTENTS}"}]\n(gdb) \n`;
+            return `${token}^done,memory=[{offset="0x0",contents="${stackedFrameContents}"}]\n(gdb) \n`;
         }
         const scbMatch = /^-data-read-memory-bytes (0x[0-9a-f]+) 4$/.exec(command);
         const scbContents = scbMatch === null ? undefined : SCB_CONTENTS[scbMatch[1]];
@@ -173,6 +191,9 @@ function response(command: string, token: number): string | string[] | undefined
         return `${token}^done,new-thread-id="2",frame={level="0",addr="0x08000100",func="worker",file="worker.c",line="20"}\n(gdb) \n`;
     }
     if (command === '-stack-select-frame 1') {
+        return `${token}^done\n(gdb) \n`;
+    }
+    if (command === '-stack-select-frame 0') {
         return `${token}^done\n(gdb) \n`;
     }
     if (command.startsWith('-stack-list-variables ')) {
@@ -491,6 +512,53 @@ async function run(): Promise<void> {
         && data.reasons.some((reason: any) => reason.code === 'FORCED'),
     'headless debug: failed location resolution keeps register decode');
     faultDisassemblyFails = false;
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    faultAssignments = [];
+    faultBacktraceMode = 'normal';
+    faultDisassemblyFails = true;
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(data.exception?.backtrace?.from === 'callSite',
+        'headless debug: fault backtrace starts at callSite when fault PC has no symbol');
+    assert(faultAssignments.includes('msp=536891360'),
+        'headless debug: fault backtrace writes SP plus 32 into MSP');
+    faultDisassemblyFails = false;
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20000000', psp: '0x0' };
+    faultAssignments = [];
+    stackedFrameContents = '0000000000000000000000209400000800000000870000089400000800000200';
+    faultDisassemblyFails = true;
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(faultAssignments.includes('msp=536870944'),
+        'headless debug: fault backtrace adds 36 when xPSR bit9 is set');
+    faultDisassemblyFails = false;
+    stackedFrameContents = STACKED_FRAME_CONTENTS;
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    faultAssignments = [];
+    const faultPcResult = await execute('eide_debug_fault', { uid: 'debug-uid' });
+    data = parse(faultPcResult);
+    assert(faultPcResult.isError !== true && data.exception?.backtrace?.from === 'faultPc'
+        && faultAssignments.includes('pc=134217876'),
+    'headless debug: fault backtrace uses fault PC when its function is known');
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    faultAssignments = [];
+    faultBacktraceMode = 'error';
+    data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
+    assert(typeof data.exception?.backtrace?.error === 'string',
+        'headless debug: ordinary backtrace failure is reported in the result');
+    assert(faultAssignments.some((item: string) => item.startsWith('msp=') && !item.includes('536891360')),
+        'headless debug: registers are written back after ordinary backtrace failure');
+
+    faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };
+    faultAssignments = [];
+    faultBacktraceMode = 'restore-mismatch';
+    result = await execute('eide_debug_fault', { uid: 'debug-uid' });
+    assert(result.isError === true && result.content[0].text.includes('registers not restored'),
+        'headless debug: register restore failure fails the whole tool');
+
+    faultBacktraceMode = 'normal';
     faultRegisters = { lr: '0x0', msp: '0x20004fc0', psp: '0x0' };
 
     data = parse(await execute('eide_debug_interrupt', { uid: 'debug-uid' }));
