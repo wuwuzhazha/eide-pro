@@ -861,7 +861,78 @@ async function run(): Promise<void> {
     await testInterruptIgnoresStaleStop();
     await testResumeAttribution();
     await testCommandFailureModes();
+    await testResolveAddress();
     console.log('debug-mi-session tests passed');
+}
+
+async function testResolveAddress(): Promise<void> {
+    const trapHarness = createHarness((command, token) => {
+        if (command.startsWith('-data-disassemble -s 0x8000094 -e 0x8000095 -- 5')) {
+            return `${token}^done,asm_insns=[src_and_asm_line={line="1",file="trap.c",fullname="C:\\\\Users\\\\x\\\\trap.c",line_asm_insn=[{address="0x08000094",func-name="trap_line",offset="0",opcodes="80 b4",inst="push\\t{r7}"}]}]\n(gdb) \n`;
+        }
+        return standardResponse(command, token);
+    });
+    await trapHarness.session.connect('localhost:3333');
+    const trap = await trapHarness.session.resolveAddress(0x08000094);
+    assertEqual(trap.address, 0x08000094, 'resolve address value');
+    assertEqual(trap.functionName, 'trap_line', 'resolve function name');
+    assertEqual(trap.file, 'trap.c', 'resolve file');
+    assertEqual(trap.line, 1, 'resolve line');
+    assertEqual(trap.fullName, 'C:\\Users\\x\\trap.c', 'resolve full name with backslashes');
+    await trapHarness.session.disconnect();
+
+    const mainHarness = createHarness((command, token) => {
+        if (command.startsWith('-data-disassemble -s 0x8000085 -e 0x8000086 -- 5')) {
+            return `${token}^done,asm_insns=[src_and_asm_line={line="39",file="main.c",fullname="C:\\\\Users\\\\x\\\\main.c",line_asm_insn=[{address="0x08000085",func-name="main",offset="16",opcodes="47 00",inst="blx\\tr3"}]}]\n(gdb) \n`;
+        }
+        return standardResponse(command, token);
+    });
+    await mainHarness.session.connect('localhost:3333');
+    const main = await mainHarness.session.resolveAddress(0x08000085);
+    assertEqual(main.line, 39, 'resolve address in the middle of an instruction');
+    assertEqual(main.functionName, 'main', 'resolve middle-of-instruction function');
+    await mainHarness.session.disconnect();
+
+    const ramHarness = createHarness((command, token) => {
+        if (command.startsWith('-data-disassemble -s 0x20000000 -e 0x20000001 -- 5')) {
+            return `${token}^error,msg="Cannot access memory at address 0x20000000"\n`;
+        }
+        return standardResponse(command, token);
+    });
+    await ramHarness.session.connect('localhost:3333');
+    const ramFailure = await captureReject(
+        ramHarness.session.resolveAddress(0x20000000),
+        'resolve RAM address',
+    );
+    assert(ramFailure.message.includes('0x20000000'), 'resolve RAM error names the address');
+    await ramHarness.session.disconnect();
+
+    const noSourceHarness = createHarness((command, token) => {
+        if (command.startsWith('-data-disassemble -s 0x8000100 -e 0x8000101 -- 5')) {
+            return `${token}^done,asm_insns=[{address="0x08000100",func-name="bare",offset="0",opcodes="00 bf",inst="nop"}]\n(gdb) \n`;
+        }
+        return standardResponse(command, token);
+    });
+    await noSourceHarness.session.connect('localhost:3333');
+    const noSource = await noSourceHarness.session.resolveAddress(0x08000100);
+    assertEqual(noSource.functionName, 'bare', 'no-source function name');
+    assertEqual(noSource.file, undefined, 'no-source does not invent file');
+    assertEqual(noSource.line, undefined, 'no-source does not invent line');
+    await noSourceHarness.session.disconnect();
+
+    const malformedHarness = createHarness((command, token) => {
+        if (command.startsWith('-data-disassemble -s 0x8000200 -e 0x8000201 -- 5')) {
+            return `${token}^done\n(gdb) \n`;
+        }
+        return standardResponse(command, token);
+    });
+    await malformedHarness.session.connect('localhost:3333');
+    const malformedFailure = await captureReject(
+        malformedHarness.session.resolveAddress(0x08000200),
+        'resolve malformed response',
+    );
+    assertEqual(malformedFailure.code, 'protocol', 'malformed disassemble response code');
+    await malformedHarness.session.disconnect();
 }
 
 run().catch(error => {

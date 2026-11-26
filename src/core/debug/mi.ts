@@ -437,6 +437,14 @@ export interface MiFrame {
     fullName?: string;
 }
 
+export interface MiSourceLocation {
+    address: number;
+    functionName?: string;
+    file?: string;
+    line?: number;
+    fullName?: string;
+}
+
 export interface MiThread {
     id: number;
     targetId?: string;
@@ -769,6 +777,41 @@ export class MiSession {
             }
             return parseMiFrame(frame, `stack[${index}].frame`);
         });
+    }
+
+    async resolveAddress(address: MiAddress): Promise<MiSourceLocation> {
+        const numericAddress = Number(address) >>> 0;
+        const normalizedAddress = formatMiAddress(numericAddress);
+        const endAddress = formatMiAddress(numericAddress + 1);
+        const record = await this.runCommand(
+            `-data-disassemble -s ${normalizedAddress} -e ${endAddress} -- 5`,
+            ['done'],
+        );
+        const instructions = record.results.asm_insns;
+        if (!Array.isArray(instructions)) {
+            throw new MiError('protocol', 'disassemble response has no instruction list');
+        }
+        const source = instructions.find(entry => isMiTuple(entry) && entry.src_and_asm_line !== undefined);
+        if (isMiTuple(source) && isMiTuple(source.src_and_asm_line)) {
+            const sourceLine = source.src_and_asm_line;
+            const lineInsns = sourceLine.line_asm_insn;
+            const firstInstruction = Array.isArray(lineInsns) && isMiTuple(lineInsns[0]) ? lineInsns[0] : undefined;
+            return {
+                address: numericAddress,
+                functionName: readOptionalMiString(firstInstruction?.['func-name']),
+                file: readOptionalMiString(sourceLine.file),
+                line: readOptionalMiNumber(sourceLine.line),
+                fullName: readOptionalMiString(sourceLine.fullname),
+            };
+        }
+        const firstInstruction = instructions.find(entry => isMiTuple(entry) && entry.address !== undefined);
+        if (isMiTuple(firstInstruction)) {
+            return {
+                address: numericAddress,
+                functionName: readOptionalMiString(firstInstruction['func-name']),
+            };
+        }
+        throw new MiError('protocol', 'disassemble response has no instruction record');
     }
 
     async listThreads(): Promise<MiThreadList> {
@@ -1274,6 +1317,23 @@ function resolveTimeout(value: number | undefined, fallback: number, name: strin
         throw new MiError('state', `${name} must be a positive integer`);
     }
     return resolved;
+}
+
+function isMiTuple(value: MiValue | undefined): value is MiTuple {
+    return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readOptionalMiString(value: MiValue | undefined): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+}
+
+function readOptionalMiNumber(value: MiValue | undefined): number | undefined {
+    const text = typeof value === 'number' ? String(value) : readOptionalMiString(value);
+    if (text === undefined) {
+        return undefined;
+    }
+    const parsed = parseTargetValue(text);
+    return parsed === undefined ? undefined : parsed;
 }
 
 function encodeMiArgument(text: string): string {
