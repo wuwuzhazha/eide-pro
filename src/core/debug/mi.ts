@@ -989,8 +989,8 @@ export class MiSession {
         return value;
     }
 
-    async backtraceWithRegisters(context: { pc: number; msp: number; lr: number }): Promise<MiFrame[]> {
-        for (const name of ['pc', 'msp', 'lr'] as const) {
+    async backtraceWithRegisters(context: { pc: number; sp: number; lr: number }): Promise<MiFrame[]> {
+        for (const name of ['pc', 'sp', 'lr'] as const) {
             const value = context[name];
             if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
                 throw new MiError('state', `invalid ${name} for backtrace context: ${String(value)}`);
@@ -998,14 +998,17 @@ export class MiSession {
         }
         const saved = {
             pc: (await this.readRegister('pc')) >>> 0,
-            msp: (await this.readRegister('msp')) >>> 0,
+            sp: (await this.readRegister('sp')) >>> 0,
             lr: (await this.readRegister('lr')) >>> 0,
         };
         let backtraceError: unknown;
         let frames: MiFrame[] = [];
         try {
+            await this.selectFrame(0);
             await this.evaluate(`$pc=${context.pc}`);
-            await this.evaluate(`$msp=${context.msp}`);
+            await this.selectFrame(0);
+            await this.evaluate(`$msp=${context.sp}`);
+            await this.selectFrame(0);
             await this.evaluate(`$lr=${context.lr}`);
             frames = await this.backtrace();
         } catch (error) {
@@ -1013,15 +1016,17 @@ export class MiSession {
         }
 
         let restoreError: Error | undefined;
-        for (const name of ['pc', 'msp', 'lr'] as const) {
+        for (const name of ['pc', 'sp', 'lr'] as const) {
             try {
+                await this.selectFrame(0);
                 await this.evaluate(`$${name}=${saved[name]}`);
             } catch (error) {
                 const detail = error instanceof Error ? error.message : String(error);
                 restoreError = restoreError ?? new MiError('state', `registers not restored: ${detail}`);
             }
         }
-        for (const name of ['pc', 'msp', 'lr'] as const) {
+        await this.selectFrame(0);
+        for (const name of ['pc', 'sp', 'lr'] as const) {
             try {
                 const actual = (await this.readRegister(name)) >>> 0;
                 if (actual !== saved[name]) {

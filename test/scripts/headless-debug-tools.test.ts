@@ -129,8 +129,10 @@ function response(command: string, token: number): string | string[] | undefined
         if (assignment) {
             const name = assignment[1];
             faultAssignments.push(`${name}=${assignment[2]}`);
-            if (faultBacktraceMode === 'restore-mismatch' && name === 'msp') {
+            if (faultBacktraceMode === 'restore-mismatch' && name === 'sp') {
                 faultRegisters.msp = '0x99999999';
+            } else if (name === 'sp') {
+                faultRegisters.msp = `0x${Number(assignment[2]).toString(16)}`;
             } else if (name in faultRegisters) {
                 (faultRegisters as any)[name] = `0x${Number(assignment[2]).toString(16)}`;
             }
@@ -139,7 +141,8 @@ function response(command: string, token: number): string | string[] | undefined
         const expression = /^"\$(\w+)"$/.exec(rawExpression);
         if (expression) {
             const values: { [name: string]: string } = {
-                r0: '0x1234', lr: faultRegisters.lr, msp: faultRegisters.msp, psp: faultRegisters.psp
+                r0: '0x1234', lr: faultRegisters.lr, msp: faultRegisters.msp,
+                sp: faultRegisters.msp, psp: faultRegisters.psp
             };
             return `${token}^done,value="${values[expression[1]] || '0x0'}"\n(gdb) \n`;
         }
@@ -520,8 +523,8 @@ async function run(): Promise<void> {
     data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
     assert(data.exception?.backtrace?.from === 'callSite',
         'headless debug: fault backtrace starts at callSite when fault PC has no symbol');
-    assert(faultAssignments.includes('msp=536891360'),
-        'headless debug: fault backtrace writes SP plus 32 into MSP');
+    assert(faultAssignments.includes('sp=536891360'),
+        'headless debug: fault backtrace writes SP plus 32 into $sp');
     faultDisassemblyFails = false;
 
     faultRegisters = { lr: '0xfffffff9', msp: '0x20000000', psp: '0x0' };
@@ -529,7 +532,7 @@ async function run(): Promise<void> {
     stackedFrameContents = '0000000000000000000000209400000800000000870000089400000800000200';
     faultDisassemblyFails = true;
     data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
-    assert(faultAssignments.includes('msp=536870944'),
+    assert(faultAssignments.includes('sp=536870944'),
         'headless debug: fault backtrace adds 36 when xPSR bit9 is set');
     faultDisassemblyFails = false;
     stackedFrameContents = STACKED_FRAME_CONTENTS;
@@ -548,7 +551,7 @@ async function run(): Promise<void> {
     data = parse(await execute('eide_debug_fault', { uid: 'debug-uid' }));
     assert(typeof data.exception?.backtrace?.error === 'string',
         'headless debug: ordinary backtrace failure is reported in the result');
-    assert(faultAssignments.some((item: string) => item.startsWith('msp=') && !item.includes('536891360')),
+    assert(faultAssignments.some((item: string) => item.startsWith('sp=') && !item.includes('536891360')),
         'headless debug: registers are written back after ordinary backtrace failure');
 
     faultRegisters = { lr: '0xfffffff9', msp: '0x20004fc0', psp: '0x0' };

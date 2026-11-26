@@ -105,6 +105,7 @@ type Responder = (command: string, token: number, fake: FakeGdb) => string | str
 
 function standardResponse(command: string, token: number): string | undefined {
     switch (command) {
+        case '-stack-select-frame 0':
         case '-gdb-set mi-async on':
         case '-gdb-set confirm off':
             return `${token}^done\n(gdb) \n`;
@@ -867,19 +868,21 @@ async function run(): Promise<void> {
 }
 
 async function testBacktraceWithRegisters(): Promise<void> {
+    const harnessCommands: string[] = [];
     const state = {
         pc: 0x11111111,
-        msp: 0x22222222,
+        sp: 0x22222222,
         lr: 0x33333333,
         writeFail: '' as string,
         readMismatch: false,
         readMismatchArmed: false,
         backtraceError: false,
         savedPc: 0,
-        savedMsp: 0,
+        savedSp: 0,
         savedLr: 0,
     };
     const harness = createHarness((command, token) => {
+        harnessCommands.push(command);
         const expression = /^-data-evaluate-expression "(\$[^"]+)"$/.exec(command);
         if (expression) {
             const name = expression[1].slice(1);
@@ -889,18 +892,22 @@ async function testBacktraceWithRegisters(): Promise<void> {
                 if (state.writeFail === register) {
                     return `${token}^error,msg="cannot assign ${register}"\n`;
                 }
+                if (register === 'sp'
+                    && harnessCommands[harnessCommands.length - 2] !== '-stack-select-frame 0') {
+                    return `${token}^error,msg="Attempt to assign to an unmodifiable value"\n`;
+                }
                 (state as any)[register] = Number(assignment[2]);
-                if (state.readMismatch && register === 'msp') {
+                if (state.readMismatch && register === 'sp') {
                     state.readMismatchArmed = true;
                 }
                 return `${token}^done,value="0x${Number(assignment[2]).toString(16)}"\n`;
             }
-            if (state.readMismatchArmed && name === 'msp') {
+            if (state.readMismatchArmed && name === 'sp') {
                 state.readMismatchArmed = false;
                 return `${token}^done,value="0x0"\n`;
             }
             if (name === 'pc' && state.savedPc !== 0
-                && (Number(state.msp) !== state.savedMsp || Number(state.lr) !== state.savedLr)) {
+                && (Number(state.sp) !== state.savedSp || Number(state.lr) !== state.savedLr)) {
                 return `${token}^done,value="0x800008e"\n`;
             }
             const value = (state as any)[name];
@@ -915,12 +922,13 @@ async function testBacktraceWithRegisters(): Promise<void> {
         return standardResponse(command, token);
     });
     await harness.session.connect('localhost:3333');
+    harnessCommands.length = 0;
     harness.fake.written.length = 0;
     state.savedPc = state.pc;
-    state.savedMsp = state.msp;
+    state.savedSp = state.sp;
     state.savedLr = state.lr;
     const frames = await harness.session.backtraceWithRegisters({
-        pc: 0x0800000f, msp: 0x20004fe0, lr: 0x08000021
+        pc: 0x0800000f, sp: 0x20004fe0, lr: 0x08000021
     });
     assertEqual(frames.length, 2, 'backtrace with registers returns frames');
     assertEqual(frames[0].functionName, 'poll', 'backtrace frame function');
@@ -928,22 +936,30 @@ async function testBacktraceWithRegisters(): Promise<void> {
     const evaluateCommands = commands.filter((line: string) => line.startsWith('-data-evaluate-expression '));
     assertEqual(evaluateCommands.length, 12, 'backtrace with registers reads/writes/verifies registers');
     assert(evaluateCommands[3].includes('$pc=134217743')
-        && evaluateCommands[4].includes('$msp=536891360')
+        && evaluateCommands[4].includes('$sp=536891360')
         && evaluateCommands[5].includes('$lr=134217761'),
-    'backtrace assigns pc, msp, lr in order');
+    'backtrace assigns pc, sp, lr in order');
     assert(evaluateCommands[6].includes('$pc=286331153')
-        && evaluateCommands[7].includes('$msp=572662306')
+        && evaluateCommands[7].includes('$sp=572662306')
         && evaluateCommands[8].includes('$lr=858993459')
         && evaluateCommands[9].includes('"$pc"')
-        && evaluateCommands[10].includes('"$msp"')
+        && evaluateCommands[10].includes('"$sp"')
         && evaluateCommands[11].includes('"$lr"'),
-    'backtrace restores original pc, msp, lr in order');
+    'backtrace restores original pc, sp, lr in order');
+    for (const index of [3, 4, 5, 6, 7, 8]) {
+        const evaluateIndex = commands.indexOf(evaluateCommands[index]);
+        assert(commands[evaluateIndex - 1] === '-stack-select-frame 0\n',
+            `assignment ${index} is preceded by selectFrame(0)`);
+    }
+    const pcReadbackIndex = harnessCommands.lastIndexOf('-data-evaluate-expression "$pc"');
+    assert(harnessCommands[pcReadbackIndex - 1] === '-stack-select-frame 0',
+        'readback is preceded by selectFrame(0)');
     assert(commands.some((line: string) => line === '-stack-list-frames\n'), 'backtrace command is issued');
 
     state.backtraceError = true;
     harness.fake.written.length = 0;
     const backtraceFailure = await captureReject(
-        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        harness.session.backtraceWithRegisters({ pc: 1, sp: 2, lr: 3 }),
         'backtrace with registers failure',
     );
     assert(backtraceFailure.message.includes('backtrace failed'), 'original backtrace error is preserved');
@@ -953,7 +969,7 @@ async function testBacktraceWithRegisters(): Promise<void> {
     state.writeFail = 'lr';
     harness.fake.written.length = 0;
     const restoreFailure = await captureReject(
-        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        harness.session.backtraceWithRegisters({ pc: 1, sp: 2, lr: 3 }),
         'register restore failure',
     );
     assertEqual(restoreFailure.code, 'state', 'restore failure code');
@@ -963,7 +979,7 @@ async function testBacktraceWithRegisters(): Promise<void> {
     state.readMismatch = true;
     harness.fake.written.length = 0;
     const mismatchFailure = await captureReject(
-        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        harness.session.backtraceWithRegisters({ pc: 1, sp: 2, lr: 3 }),
         'register readback mismatch',
     );
     assertEqual(mismatchFailure.code, 'state', 'readback mismatch code');
@@ -974,7 +990,7 @@ async function testBacktraceWithRegisters(): Promise<void> {
     harness.fake.written.length = 0;
     for (const invalid of [-1, NaN, 1.5, 2 ** 32]) {
         const invalidFailure = await captureReject(
-            harness.session.backtraceWithRegisters({ pc: invalid, msp: 2, lr: 3 }),
+            harness.session.backtraceWithRegisters({ pc: invalid, sp: 2, lr: 3 }),
             'invalid backtrace context',
         );
         assertEqual(invalidFailure.code, 'state', 'invalid context code');

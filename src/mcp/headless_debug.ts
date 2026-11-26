@@ -327,7 +327,7 @@ export class HeadlessDebugSession {
             await session.selectFrame(0);
             const frames = await session.backtraceWithRegisters({
                 pc: backtracePc,
-                msp: stackPointerBeforeException(stackPointer, frame.xpsr),
+                sp: stackPointerBeforeException(stackPointer, frame.xpsr),
                 lr: frame.lr
             });
             report.exception.backtrace = {
