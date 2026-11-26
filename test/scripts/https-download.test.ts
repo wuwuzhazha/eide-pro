@@ -62,14 +62,33 @@ async function run(): Promise<void> {
         res.writeHead(200, { 'content-length': '10' });
         res.write('abc');
     }, async base => {
+        const dest = NodePath.join(fs.mkdtempSync(NodePath.join(os.tmpdir(), 'https-download-')), 'half');
         let message = '';
         try {
-            await guard(fetchHttpsText(`${base}/half`, 200, get), 'partial timeout');
+            await guard(downloadHttpsFile(`${base}/half`, dest, undefined, 200, get), 'partial timeout');
         } catch (error) {
             message = error instanceof Error ? error.message : String(error);
         }
         assert(message.includes('timed out after 200 ms') && message.includes(`${base}/half`),
             `partial response: explicit timeout (${message})`);
+        assert(!fs.existsSync(dest), 'partial response timeout: partial file is removed');
+    });
+
+    await withServer((_req, res) => {
+        res.writeHead(200, { 'content-length': '10' });
+        res.write('abc');
+        setTimeout(() => res.socket?.destroy(), 20);
+    }, async base => {
+        const dest = NodePath.join(fs.mkdtempSync(NodePath.join(os.tmpdir(), 'https-download-')), 'aborted');
+        let message = '';
+        try {
+            await guard(downloadHttpsFile(`${base}/aborted`, dest, undefined, 1000, get), 'aborted response');
+        } catch (error) {
+            message = error instanceof Error ? error.message : String(error);
+        }
+        assert(message.length > 0 && message.includes(`${base}/aborted`),
+            `aborted response: explicit failure with URL (${message})`);
+        assert(!fs.existsSync(dest), 'aborted response: partial file is removed');
     });
 
     await withServer((_req, res) => {

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as https from 'https';
 import type { ClientRequest, IncomingMessage } from 'http';
+import type { WriteStream } from 'fs';
 
 const DEFAULT_REDIRECT_LIMIT = 6;
 const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
@@ -39,9 +40,12 @@ export function downloadHttpsFile(
     return new Promise((resolve, reject) => {
         let activeRequest: ClientRequest | undefined;
         let activeResponse: IncomingMessage | undefined;
+        let activeFile: WriteStream | undefined;
         const settle = (error: Error): void => {
             activeResponse?.destroy();
             activeRequest?.destroy();
+            activeFile?.destroy();
+            fs.rmSync(dest, { force: true });
             reject(error);
         };
         const follow = (current: string, redirectsLeft: number) => {
@@ -63,8 +67,7 @@ export function downloadHttpsFile(
                 }
                 if (status !== 200) {
                     res.resume();
-                    watch.cancel();
-                    reject(new Error(`Download failed: HTTP ${status} for ${current}`));
+                    settle(new Error(`Download failed: HTTP ${status} for ${current}`));
                     return;
                 }
                 const total = parseInt(res.headers['content-length'] || '');
@@ -74,30 +77,21 @@ export function downloadHttpsFile(
                     watch.arm();
                     onProgress?.(received, total);
                 });
-                res.once('error', error => {
-                    watch.cancel();
-                    reject(error);
-                });
+                res.once('error', error => settle(new Error(`Download from ${current} failed: ${error.message}`)));
                 res.once('end', () => watch.cancel());
                 const file = fs.createWriteStream(dest);
+                activeFile = file;
                 res.pipe(file);
                 file.once('finish', () => file.close(() => {
                     watch.cancel();
                     if (!Number.isNaN(total) && received !== total) {
-                        fs.rmSync(dest, { force: true });
-                        reject(new Error(`Truncated download: received ${received} of ${total} bytes`));
+                        settle(new Error(`Truncated download: received ${received} of ${total} bytes`));
                         return;
                     }
                     resolve();
                 }));
-                file.once('error', error => {
-                    watch.cancel();
-                    reject(error);
-                });
-            }).once('error', error => {
-                watch.cancel();
-                reject(error);
-            });
+                file.once('error', error => settle(new Error(`Download to ${dest} failed: ${error.message}`)));
+            }).once('error', error => settle(new Error(`Download from ${current} failed: ${error.message}`)));
         };
         follow(url, DEFAULT_REDIRECT_LIMIT);
     });
