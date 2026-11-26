@@ -7,6 +7,7 @@ import {
     decodeCortexFault,
     decodeHfsr,
     HFSR_BITS,
+    stackPointerBeforeException,
     selectFaultStack,
     decodeStackedFrame,
     STACKED_FRAME_WORDS,
@@ -208,3 +209,37 @@ assertEqual(negativeFrame.r0, 0xffffffff, 'negative stacked word is normalized t
 assertEqual(negativeFrame.xpsr, 0xfffffff8, 'negative xpsr is normalized to unsigned');
 
 console.log('debug-fault stacked frame tests passed');
+
+assertEqual(STACKED_FRAME_WORDS, 8, 'stacked frame word count constant');
+assertEqual(stackPointerBeforeException(0x20004fc0, 0x60000000), 0x20004fe0,
+    'exception SP without alignment padding');
+assertEqual(stackPointerBeforeException(0x20004fc0, 0x60000200), 0x20004fe4,
+    'exception SP with alignment padding');
+
+for (const [stackPointer, xpsr] of [
+    [0xffffffff, 0x60000000],
+    [0xfffffff0, 0x60000200],
+]) {
+    let message = '';
+    try {
+        stackPointerBeforeException(stackPointer, xpsr);
+    } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.length > 0, `overflowing exception SP is rejected (${message})`);
+}
+
+for (const [stackPointer, xpsr] of [
+    [-1, 0x60000000],
+    [0x20004fc0, 1.5],
+]) {
+    let message = '';
+    try {
+        stackPointerBeforeException(stackPointer, xpsr);
+    } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+    }
+    assert(message.length > 0, `invalid exception SP inputs are rejected (${message})`);
+}
+
+console.log('debug-fault exception SP tests passed');

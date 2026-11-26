@@ -92,6 +92,19 @@ export function decodeStackedFrame(words: readonly number[]): CortexStackedFrame
     };
 }
 
+export function stackPointerBeforeException(stackPointer: number, xpsr: number): number {
+    if (!Number.isInteger(stackPointer) || stackPointer < 0 || stackPointer > 0xffffffff
+        || !Number.isInteger(xpsr) || xpsr < 0 || xpsr > 0xffffffff) {
+        throw new Error('stack pointer and xPSR must be uint32 integers');
+    }
+    const aligned = (xpsr & 0x200) !== 0 ? 4 : 0;
+    const result = stackPointer + STACKED_FRAME_WORDS * 4 + aligned;
+    if (result > 0xffffffff) {
+        throw new Error(`stack pointer before exception overflows: ${result}`);
+    }
+    return result >>> 0;
+}
+
 export const HFSR_BITS = {
     VECTTBL: 0x00000002,
     FORCED: 0x40000000,

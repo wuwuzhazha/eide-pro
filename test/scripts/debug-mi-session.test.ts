@@ -862,7 +862,112 @@ async function run(): Promise<void> {
     await testResumeAttribution();
     await testCommandFailureModes();
     await testResolveAddress();
+    await testBacktraceWithRegisters();
     console.log('debug-mi-session tests passed');
+}
+
+async function testBacktraceWithRegisters(): Promise<void> {
+    const state = {
+        pc: 0x11111111,
+        msp: 0x22222222,
+        lr: 0x33333333,
+        writeFail: '' as string,
+        readMismatch: false,
+        readMismatchArmed: false,
+        backtraceError: false,
+    };
+    const harness = createHarness((command, token) => {
+        const expression = /^-data-evaluate-expression "(\$[^"]+)"$/.exec(command);
+        if (expression) {
+            const name = expression[1].slice(1);
+            const assignment = /^(\w+)=(\d+)$/.exec(name);
+            if (assignment) {
+                const register = assignment[1];
+                if (state.writeFail === register) {
+                    return `${token}^error,msg="cannot assign ${register}"\n`;
+                }
+                (state as any)[register] = Number(assignment[2]);
+                if (state.readMismatch && register === 'msp') {
+                    state.readMismatchArmed = true;
+                }
+                return `${token}^done,value="0x${Number(assignment[2]).toString(16)}"\n`;
+            }
+            if (state.readMismatchArmed && name === 'msp') {
+                state.readMismatchArmed = false;
+                return `${token}^done,value="0x0"\n`;
+            }
+            const value = (state as any)[name];
+            return `${token}^done,value="0x${Number(value).toString(16)}"\n`;
+        }
+        if (command === '-stack-list-frames') {
+            if (state.backtraceError) {
+                return `${token}^error,msg="backtrace failed"\n`;
+            }
+            return `${token}^done,stack=[frame={level="0",addr="0x0800000f",func="poll",file="main.c",line="15"},frame={level="1",addr="0x08000021",func="main",file="main.c",line="21"}]\n(gdb) \n`;
+        }
+        return standardResponse(command, token);
+    });
+    await harness.session.connect('localhost:3333');
+    harness.fake.written.length = 0;
+    const frames = await harness.session.backtraceWithRegisters({
+        pc: 0x0800000f, msp: 0x20004fe0, lr: 0x08000021
+    });
+    assertEqual(frames.length, 2, 'backtrace with registers returns frames');
+    assertEqual(frames[0].functionName, 'poll', 'backtrace frame function');
+    const commands = harness.fake.written.map((line: string) => line.replace(/^\d+/, ''));
+    const evaluateCommands = commands.filter((line: string) => line.startsWith('-data-evaluate-expression '));
+    assertEqual(evaluateCommands.length, 12, 'backtrace with registers reads/writes/verifies registers');
+    assert(evaluateCommands[3].includes('$pc=134217743')
+        && evaluateCommands[4].includes('$msp=536891360')
+        && evaluateCommands[5].includes('$lr=134217761'),
+    'backtrace assigns pc, msp, lr in order');
+    assert(evaluateCommands[6].includes('$pc=286331153')
+        && evaluateCommands[8].includes('$msp=572662306')
+        && evaluateCommands[10].includes('$lr=858993459'),
+    'backtrace restores original pc, msp, lr in order');
+    assert(commands.some((line: string) => line === '-stack-list-frames\n'), 'backtrace command is issued');
+
+    state.backtraceError = true;
+    harness.fake.written.length = 0;
+    const backtraceFailure = await captureReject(
+        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        'backtrace with registers failure',
+    );
+    assert(backtraceFailure.message.includes('backtrace failed'), 'original backtrace error is preserved');
+    assertEqual(state.pc, 0x11111111, 'registers restored after failed backtrace');
+    state.backtraceError = false;
+
+    state.writeFail = 'lr';
+    harness.fake.written.length = 0;
+    const restoreFailure = await captureReject(
+        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        'register restore failure',
+    );
+    assertEqual(restoreFailure.code, 'state', 'restore failure code');
+    assert(restoreFailure.message.includes('registers not restored'), 'restore failure message');
+    state.writeFail = '';
+
+    state.readMismatch = true;
+    harness.fake.written.length = 0;
+    const mismatchFailure = await captureReject(
+        harness.session.backtraceWithRegisters({ pc: 1, msp: 2, lr: 3 }),
+        'register readback mismatch',
+    );
+    assertEqual(mismatchFailure.code, 'state', 'readback mismatch code');
+    assert(mismatchFailure.message.includes('registers not restored'), 'readback mismatch message');
+    state.readMismatch = false;
+    state.readMismatchArmed = false;
+
+    harness.fake.written.length = 0;
+    for (const invalid of [-1, NaN, 1.5, 2 ** 32]) {
+        const invalidFailure = await captureReject(
+            harness.session.backtraceWithRegisters({ pc: invalid, msp: 2, lr: 3 }),
+            'invalid backtrace context',
+        );
+        assertEqual(invalidFailure.code, 'state', 'invalid context code');
+    }
+    assertEqual(harness.fake.written.length, 0, 'invalid context sends no MI command');
+    await harness.session.disconnect();
 }
 
 async function testResolveAddress(): Promise<void> {

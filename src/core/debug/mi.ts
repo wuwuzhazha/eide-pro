@@ -989,6 +989,51 @@ export class MiSession {
         return value;
     }
 
+    async backtraceWithRegisters(context: { pc: number; msp: number; lr: number }): Promise<MiFrame[]> {
+        for (const name of ['pc', 'msp', 'lr'] as const) {
+            const value = context[name];
+            if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+                throw new MiError('state', `invalid ${name} for backtrace context: ${String(value)}`);
+            }
+        }
+        const saved = {
+            pc: (await this.readRegister('pc')) >>> 0,
+            msp: (await this.readRegister('msp')) >>> 0,
+            lr: (await this.readRegister('lr')) >>> 0,
+        };
+        let backtraceError: unknown;
+        let frames: MiFrame[] = [];
+        try {
+            await this.evaluate(`$pc=${context.pc}`);
+            await this.evaluate(`$msp=${context.msp}`);
+            await this.evaluate(`$lr=${context.lr}`);
+            frames = await this.backtrace();
+        } catch (error) {
+            backtraceError = error;
+        }
+
+        let restoreError: Error | undefined;
+        for (const name of ['pc', 'msp', 'lr'] as const) {
+            try {
+                await this.evaluate(`$${name}=${saved[name]}`);
+                const actual = (await this.readRegister(name)) >>> 0;
+                if (actual !== saved[name]) {
+                    throw new Error(`${name} expected ${saved[name]}, got ${actual}`);
+                }
+            } catch (error) {
+                const detail = error instanceof Error ? error.message : String(error);
+                restoreError = restoreError ?? new MiError('state', `registers not restored: ${detail}`);
+            }
+        }
+        if (restoreError !== undefined) {
+            throw restoreError;
+        }
+        if (backtraceError !== undefined) {
+            throw backtraceError;
+        }
+        return frames;
+    }
+
     private async start(): Promise<void> {
         const child = this.createProcess();
         this.process = child;
