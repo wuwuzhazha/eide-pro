@@ -2,6 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+const freshness = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'check-out-fresh.js')], { stdio: 'inherit' });
+if (freshness.status !== 0) {
+    process.exit(1);
+}
+
 const sourceDir = path.join(__dirname, 'scripts');
 const testDir = path.join(__dirname, '..', 'out', 'tmp', 'test', 'scripts');
 

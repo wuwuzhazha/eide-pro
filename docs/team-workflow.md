@@ -121,6 +121,14 @@ verified with the host toolchain removed from PATH; see
 rerun that file in isolation first: if it passes, treat it as concurrent
 compilation noise, not a product defect.
 
+`node scripts/check-out-fresh.js` (also run at the start of `test/run-tests.js`)
+checks that every `src/**/*.ts` has an `out/src/**/*.js` at least as new as its
+source; if not, it names the first five stale files and exits 1 with
+`run: npm run compile`. This closes audit F-C-10: after running only
+`compile:test`, a broken validation function still passed because the tests
+loaded the old `out/src`. `npm test` compiles both trees first, so it is
+unaffected.
+
 ## Pre-commit checklist
 
 - `git diff --cached --stat` contains only files in this task card.
