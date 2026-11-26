@@ -38,6 +38,18 @@ async function run(): Promise<void> {
     assert(JSON.stringify(names[0]) === JSON.stringify(names[1]),
         'both transports expose the same tool name set');
 
+    const faultServer = createMcpServer(async () => ({ content: [] }), { version: '4.3.0', debugTools: true });
+    const [faultClientTransport, faultServerTransport] = InMemoryTransport.createLinkedPair();
+    const faultClient = new Client({ name: 'registration-test', version: '1.0.0' });
+    await Promise.all([faultServer.connect(faultServerTransport), faultClient.connect(faultClientTransport)]);
+    const faultTools = await faultClient.listTools();
+    const faultDescription = faultTools.tools.find((tool: any) => tool.name === 'eide_debug_fault')?.description ?? '';
+    assert(faultDescription.includes('exception')
+        && faultDescription.includes('callerLocation')
+        && faultDescription.includes('faultLocation'),
+    `eide_debug_fault describes stacked-frame diagnosis (${faultDescription})`);
+    await faultClient.close();
+
     const unsupported = await executeTool('eide_debug_connect', { uid: 'probe' }, {} as any);
     assert(unsupported.isError === true
         && (unsupported as any).structuredContent.error.name === 'UnsupportedTransport'

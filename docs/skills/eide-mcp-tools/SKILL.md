@@ -290,6 +290,10 @@ Build the project before connecting; the default ELF is
 
 Addresses accept a number or a `0x`-prefixed string. `eide_debug_fault` reads
 HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.
+When stopped in a HardFault/exception handler, its `exception` adds the selected
+stack (MSP/PSP), stacked `frame`, `faultLocation` for the bad jumped-to PC, and
+`callerLocation` for stacked LR-1 (the call site to fix); otherwise `exception`
+is null with `exceptionUnavailable`. Passing hfsr/cfsr/... is offline decoding.
 `eide_debug_backtrace` returns `{ items }` with frames carrying level, address,
 and optional function/file/line/fullname. `eide_debug_list_breakpoints` returns
 `{ items }` with breakpoint type, enabled state, address, source location,
@@ -334,6 +338,18 @@ eide_debug_disconnect(uid)
 ```
 
 ## 7. Common workflows
+
+### Diagnose a HardFault
+
+```text
+1. eide_debug_connect(uid, target=...)
+2. eide_debug_set_breakpoint(uid, location="HardFault_Handler", hardware=false)
+3. eide_debug_continue(uid)
+4. eide_debug_fault(uid)
+5. Read exception.callerLocation.file/line: this is the call site to fix.
+   exception.faultLocation is the bad address jumped into, usually not the line to edit.
+   reasons containing FORCED mean another fault escalated to HardFault.
+```
 
 ### Change a define and rebuild
 

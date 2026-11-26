@@ -622,7 +622,7 @@ export function createMcpServer(
             'eide_debug_fault',
             {
                 title: 'Decode Cortex Fault',
-                                description: debugDescription('Decode Cortex-M fault status registers. Reads the memory-mapped SCB registers HFSR/CFSR/MMAR/BFAR from the active session when values are omitted.'),
+                                description: debugDescription('Decode Cortex-M fault status registers. Reads the memory-mapped SCB registers HFSR/CFSR/MMAR/BFAR from the active session when values are omitted; supplying hfsr/cfsr/... switches to offline decoding. When stopped in a HardFault/exception handler, also returns exception with stack (MSP/PSP), stacked frame, faultLocation (stacked PC, the jumped-to bad address), and callerLocation (stacked LR-1, the call site to fix)., the call site to fix). Outside an exception handler, exception is null and exceptionUnavailable explains why.'),
                 inputSchema: {
                     uid: uidSchema,
                     hfsr: z.number().int().nonnegative().optional(),
