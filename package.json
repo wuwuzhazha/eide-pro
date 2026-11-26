@@ -244,7 +244,7 @@
                     "EIDE.ExternalTools.IndexUrl": {
                         "type": "string",
                         "scope": "machine",
-                        "markdownDescription": "External tools **index.json** url, ref: https://github.com/github0null/eide_default_external_tools_index"
+                        "markdownDescription": "External tools **index.json** url, ref: https://github.com/github0null/eide_default_external_tools_index. The default data source is the upstream EIDE community repository (github0null); if that repository is unavailable, point this setting at your own mirror."
                     },
                     "EIDE.SourceTree.AutoSearchIncludePath": {
                         "type": "boolean",

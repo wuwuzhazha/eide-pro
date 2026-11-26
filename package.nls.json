@@ -127,8 +127,8 @@
     "settings.option.show.output.files": "Show output files in project resource explorer",
     
     "settings.repo.use.proxy": "Use proxy to improve network speed for github (experimental function)",
-    "settings.template.repo.url": "Public github template repository url, format: `<user_name>`/`<repository_name>`/contents/`<directory_path>`",
-    "settings.cmsispack.repo.url": "Public github cmsis-pack repository url, format: `<user_name>`/`<repository_name>`/contents/`<directory_path>`",
+    "settings.template.repo.url": "Public github template repository url, format: `<user_name>`/`<repository_name>`/contents/`<directory_path>`. The default data source is the upstream EIDE community repository (github0null); if that repository is unavailable, point this setting at your own mirror.",
+    "settings.cmsispack.repo.url": "Public github cmsis-pack repository url, format: `<user_name>`/`<repository_name>`/contents/`<directory_path>`. The default data source is the upstream EIDE community repository (github0null); if that repository is unavailable, point this setting at your own mirror.",
     "settings.template.repo.github_token": "Specify a Github personal access token for a **private template repository** so that eide can access the repository and download templates from it.",
 
     "settings.serial.def.port": "Default port name",
