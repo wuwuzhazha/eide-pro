@@ -14,7 +14,7 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
 
 [English](./README.md)
 
-![AI agent 通过 MCP 驱动 EIDE Pro](./docs/media/headless-demo.svg)
+![AI agent 通过 MCP 驱动 EIDE Pro](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
 
 ## 概述
 

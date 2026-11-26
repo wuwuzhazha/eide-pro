@@ -15,7 +15,7 @@ project and build model through a CLI and MCP server.
 
 [简体中文](./README_ZH-CN.md)
 
-![Agent driving EIDE Pro over MCP](./docs/media/headless-demo.svg)
+![Agent driving EIDE Pro over MCP](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
 
 ## Overview
 
