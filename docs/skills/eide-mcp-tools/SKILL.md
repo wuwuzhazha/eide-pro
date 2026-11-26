@@ -37,7 +37,7 @@ but calling one returns `UnsupportedTransport`:
 
 ```json
 {"success":false,"error":{"kind":"config","name":"UnsupportedTransport",
-  "message":"Debug tools require the headless MCP (stdio). Start: eide-mcp --project <dir>"}}
+  "message":"This tool needs the stdio transport. Start eide-mcp --project <dir> and call it there."}}
 ```
 
 Treat that as "use the other transport", not as "this tool is unavailable".
