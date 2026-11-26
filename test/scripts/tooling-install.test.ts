@@ -96,6 +96,25 @@ async function run(): Promise<void> {
     assert(downloadPath.endsWith('eide-pro-headless-4.3.0.tgz'), 'install: tarball path is derived from version');
     assert(successCalls === 2, 'install: runs npm install and verification exactly once');
 
+    const reportedVersion = await installHeadlessTooling(baseOptions({
+        run: async (_file: string, args: string[]) => args[0] === 'install'
+            ? { code: 0, stdout: '', stderr: '' }
+            : { code: 0, stdout: '4.3.0\n', stderr: '' }
+    }));
+    assert(reportedVersion.ok,
+        `install: verification accepts the expected version (${JSON.stringify(reportedVersion)})`);
+
+    const shadowedVersion = await installHeadlessTooling(baseOptions({
+        run: async (_file: string, args: string[]) => args[0] === 'install'
+            ? { code: 0, stdout: '', stderr: '' }
+            : { code: 0, stdout: '1.0.0\n', stderr: '' }
+    }));
+    assert(!shadowedVersion.ok
+        && shadowedVersion.message.includes('4.3.0')
+        && shadowedVersion.message.includes('1.0.0')
+        && shadowedVersion.message.includes('PATH'),
+        `install: a shadowing eide-cli fails verification with both versions (${JSON.stringify(shadowedVersion)})`);
+
     let downloadFailureRuns = 0;
     const downloadFailure = await installHeadlessTooling(baseOptions({
         download: async () => {

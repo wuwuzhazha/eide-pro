@@ -38,9 +38,6 @@ export function decideInstallPrompt(state: ToolingState, extensionVersion: strin
     if (state.dismissedVersion === extensionVersion) {
         return { action: 'skip', reason: 'dismissed' };
     }
-    if (state.cliVersion === extensionVersion) {
-        return { action: 'prompt', missingPrereqs: [] };
-    }
 
     const missingPrereqs: string[] = [];
     if (state.nodeVersion === undefined) {
@@ -109,6 +106,14 @@ export async function installHeadlessTooling(options: InstallOptions): Promise<I
         const result = await options.run('eide-cli', ['--version'], installTimeoutMs);
         if (result.code !== 0) {
             return { ok: false, message: `verify failed: ${commandFailure(result)}` };
+        }
+        const installed = result.stdout.split(/\r?\n/, 1)[0].trim();
+        if (installed !== options.version) {
+            return {
+                ok: false,
+                message: `verify failed: expected eide-cli ${options.version} but 'eide-cli --version' reported '${installed}'; `
+                    + `an older eide-cli earlier on PATH may be shadowing the installed one`
+            };
         }
     } catch (error) {
         return { ok: false, message: `verify failed: ${errorMessage(error)}` };
