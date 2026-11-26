@@ -72,16 +72,16 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Node.js 22 for VSIX tooling
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
       - name: Verify VSIX contents before packaging
         run: npm run verify:vsix
 
       - name: Package headless distribution
         run: npm run package:headless
-
-      - name: Setup Node.js 22 for VSIX packaging
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
 
       - name: Package VSIX
         env:
