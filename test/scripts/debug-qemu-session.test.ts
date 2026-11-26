@@ -22,7 +22,7 @@ function skipped(reason: string): never {
 function assert(condition: boolean, message: string): void {
     if (!condition) {
         console.error('FAIL:', message);
-        process.exit(1);
+        throw new Error(message);
     }
     console.log('OK:', message);
 }
@@ -383,11 +383,15 @@ async function run(): Promise<void> {
             await faultCall('eide_debug_disconnect');
             console.log('QEMU FAULT DIAGNOSIS RAN');
         } finally {
+            await session.call('eide_debug_disconnect');
             await stopProcess(session.qemuProcess);
             fs.rmSync(session.root, { recursive: true, force: true });
         }
         console.log('All QEMU GDB/MI session tests passed.');
     } finally {
+        if (qemuProcess !== undefined) {
+            await session.call('eide_debug_disconnect');
+        }
         await stopProcess(qemuProcess);
         fs.rmSync(root, { recursive: true, force: true });
     }
