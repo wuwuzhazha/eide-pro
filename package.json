@@ -38,7 +38,7 @@
     "homepage": "https://github.com/wuwuzhazha/eide-pro",
     "license": "MIT",
     "description": "EIDE Pro: embedded IDE with headless CLI/MCP for 8051/STM8/Cortex-M/MIPS/RISC-V",
-    "version": "4.3.1",
+    "version": "4.3.2",
     "preview": false,
     "engines": {
         "vscode": "^1.89.0"
