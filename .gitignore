@@ -58,3 +58,4 @@ dotnet-runtime*.exe
 
 # local task cards (dispatch artifacts, not shipped)
 .tasks/
+.demo-work/

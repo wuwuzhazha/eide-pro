@@ -15,14 +15,14 @@ project and build model through a CLI and MCP server.
 
 [简体中文](./README_ZH-CN.md)
 
+![Agent driving EIDE Pro over MCP](./docs/media/headless-demo.svg)
+
 ## Overview
 
 - **Agent automation** — one EIDE project, two ways to work on it: develop in
   VS Code, and build, flash, and debug the same project from CI, scripts, and
-  AI agents through the CLI and MCP server. GDB/MI debugging covers reading
-  variables, stepping, decoding Cortex-M fault registers, and looking up SVD
-  peripherals; the debug loop (connect, breakpoints, stack frames, variable
-  reads, fault decode, disconnect) runs in CI against QEMU. See the
+  AI agents through the CLI and MCP server. The GDB/MI debug loop is verified
+  in CI against QEMU. See the
   [Headless CLI and MCP guide](./docs/headless.md#mcp-server-stdio).
 - **Project setup** — create projects from built-in templates, or import
   Keil 5 (MDK), IAR, and Eclipse projects in the editor; an imported project

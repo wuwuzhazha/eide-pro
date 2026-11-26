@@ -1,0 +1,6 @@
+{"version":2,"width":100,"height":30,"timestamp":0,"env":{"SHELL":"/bin/bash","TERM":"xterm-256color"}}
+["0.50","o","EIDE Pro - one project, built by an AI agent over MCP (real eide-cli output)\r\n"]
+["1.30","o","$ eide-cli create --name demo --template stm32f1xx_gcc --output ./demo-out\r\n"]
+["2.50","o","{\"success\":true,\"command\":\"create\",\"projectPath\":\"./demo-out/demo\",\"workspaceFile\":\"./demo-out/demo/demo.code-workspace\",\"template\":\"stm32f1xx_gcc\",\"type\":\"ARM\",\"uid\":\"<generated>\",\"files\":90}\r\n"]
+["3.30","o","$ eide-cli plan --project ./demo-out/demo\r\n"]
+["4.50","o","{\"success\":true,\"command\":\"plan\",\"configHash\":\"55ff7555cade2be3…\",\"outDir\":\"./demo-out/demo/build/Debug\"…}\r\n"]

@@ -14,13 +14,14 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
 
 [English](./README.md)
 
+![AI agent 通过 MCP 驱动 EIDE Pro](./docs/media/headless-demo.svg)
+
 ## 概述
 
 - **Agent 自动化** — 同一个 EIDE 工程，两种工作方式：在 VS Code 里开发，在
   CI、脚本和 AI agent 里通过 CLI 与 MCP 服务器构建、烧录、调试同一个工程。
-  GDB/MI 调试覆盖读取变量、单步执行、解码 Cortex-M fault 寄存器、查询 SVD
-  外设；调试回路（连接、断点、栈帧、读变量、fault 解码、断开）已在 CI 中
-  用 QEMU 实跑。见 [Headless CLI 与 MCP 指南](./docs/headless.md#mcp-server-stdio)。
+  GDB/MI 调试回路已在 CI 中用 QEMU 实跑。见
+  [Headless CLI 与 MCP 指南](./docs/headless.md#mcp-server-stdio)。
 - **工程创建** — 使用内置模板创建工程，或在编辑器内导入 Keil 5 (MDK)、IAR、
   Eclipse 工程；导入即写入 `miscInfo.uid`，导入后的工程可直接被 CLI 打开和
   构建。Cortex-M 工程可安装标准 Keil 芯片支持包。Keil 导入的源码、目标/分组/
