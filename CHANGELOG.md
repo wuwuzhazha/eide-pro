@@ -6,7 +6,7 @@ All notable version changes will be recorded in this file.
 
 ***
 
-### [Unreleased]
+### [v4.3.1]
 
 **Breaking**:
   - The bundled `python36` runtime is no longer installed or used; every map view toolchain parses maps with the builtin parser.
@@ -39,6 +39,7 @@ All notable version changes will be recorded in this file.
   - Build results list SDCC `.ihx` artifacts; the AVR RTOS template uses ISR macros.
   - The MCP server identifies as `EIDE Pro` with the real extension version, and PATH resolution uses the platform-specific delimiter.
   - Tooling installation retries transient network failures and verifies npm shims through ComSpec on Windows.
+  - The bundled `unify_builder`, `serial_monitor`, `axf2elf` and `verchk` binaries now declare `rollForward: LatestMajor`, so they run on any newer .NET runtime (8/9/10/...) instead of requiring exactly .NET 6.
   - The Linux `unify_builder` hands `bash -c` its command as one argv element, so postbuild tools receive paths that contain spaces and projects such as imported Keil targets (`Target 1`) produce their hex/bin outputs.
 
 **Changes**:
@@ -46,6 +47,7 @@ All notable version changes will be recorded in this file.
   - MCP tool results provide the same JSON payload as `structuredContent` and as `content[0].text`; debug tools are listed on HTTP but return `UnsupportedTransport` with guidance to use stdio.
   - In single-project headless mode, `uid` is optional in tool arguments; when supplied, it must still match the loaded project.
   - The VSIX excludes internal task/process notes and the local `lib/node-utility` copy; release packaging verifies VSIX contents against tracked files.
+  - The eide_tools C# sources now live in the `lib/eide_tools` submodule (our fork of the upstream repository, including the argv-array fix), and CI rebuilds and smoke-tests the bundled builder binaries from that source on every platform, so the shipped binaries are reproducible.
   - Removed the dead `EIDE.Option.EnableTelemetry` setting and replaced upstream/offline-help links with EIDE Pro's GitHub links; the feedback prompt no longer offers the upstream sponsor button.
   - The IAR/Segger project importer runs on the QuickJS runtime bundled in `res/scripts` instead of the downloaded `~/.eide/bin/scripts`; it reports an explicit error on platforms without a bundled runtime (macOS).
 

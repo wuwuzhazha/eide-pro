@@ -1,6 +1,6 @@
 ---
 name: eide-mcp-tools
-version: 4.3.0
+version: 4.3.1
 description: >-
   Operate EIDE Pro embedded MCU projects through MCP tools: build, rebuild,
   clean, flash, project configuration, stack usage, callgraph, and GDB
