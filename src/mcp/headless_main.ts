@@ -26,6 +26,7 @@ const usage = [
     '      --build-timeout <ms>  Build timeout (default: 1800000)',
     '      --flash-timeout <ms>  Flash timeout (default: 120000)',
     '      --print-skill        Print the bundled MCP skill and exit',
+    '  -v, --version           Print the MCP version',
     '  -h, --help                Show this help'
 ].join('\n');
 
@@ -50,6 +51,16 @@ function readTimeout(value: string, name: string): number {
         throw new UsageError(`Invalid ${name}: ${value}`);
     }
     return parsed;
+}
+
+export type McpArguments =
+    | { kind: 'help' }
+    | { kind: 'version' }
+    | { kind: 'server'; arguments: ServerArguments };
+
+function printVersion(packageJsonPath?: string): number {
+    process.stdout.write(cliVersion(packageJsonPath) + '\n');
+    return 0;
 }
 
 interface ServerArguments {
@@ -78,7 +89,7 @@ function printSkill(): number {
     return 0;
 }
 
-function parseArguments(argv: string[]): ServerArguments | undefined {
+function parseArguments(argv: string[]): McpArguments {
     const projectPaths: string[] = [];
     let target: string | undefined;
     let resourcesDir: string | undefined;
@@ -93,11 +104,12 @@ function parseArguments(argv: string[]): ServerArguments | undefined {
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
         switch (arg) {
-            case '--print-skill':
-                return undefined;
             case '-h':
             case '--help':
-                return undefined;
+                return { kind: 'help' };
+            case '-v':
+            case '--version':
+                return { kind: 'version' };
             case '-p':
             case '--project':
                 projectPaths.push(readValue(argv, i, arg));
@@ -152,46 +164,53 @@ function parseArguments(argv: string[]): ServerArguments | undefined {
         resourcesDir = bundledResourcesDir();
     }
     return {
-        projectPaths,
-        target,
-        resourcesDir,
-        extensionRoot,
-        toolchainPath,
-        settingsFile,
-        flasherExecutable,
-        gdbPath,
-        buildTimeoutMs,
-        flashTimeoutMs
+        kind: 'server',
+        arguments: {
+            projectPaths,
+            target,
+            resourcesDir,
+            extensionRoot,
+            toolchainPath,
+            settingsFile,
+            flasherExecutable,
+            gdbPath,
+            buildTimeoutMs,
+            flashTimeoutMs
+        }
     };
 }
 
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[], packageJsonPath?: string): Promise<number> {
     if (argv.includes('--print-skill')) {
         return printSkill();
     }
-    let args: ServerArguments | undefined;
+    let args: McpArguments;
     try {
         args = parseArguments(argv);
     } catch (error) {
         process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${usage}\n`);
         return 3;
     }
-    if (!args) {
+    if (args.kind === 'version') {
+        return printVersion(packageJsonPath);
+    }
+    if (args.kind === 'help') {
         process.stdout.write(usage + '\n');
         return 0;
     }
 
+    const serverArgs = args.arguments;
     const options: HeadlessToolOptions = {
-        ...args,
+        ...serverArgs,
         runner: new NodeProcessRunner(),
         logger: new StderrLogger()
     };
     const server = createMcpServer(
         createHeadlessToolExecutor(options), {
-            version: cliVersion(),
+            version: cliVersion(packageJsonPath),
             debugTools: true,
             headless: true,
-            singleProject: args.projectPaths.length === 1
+            singleProject: serverArgs.projectPaths.length === 1
         });
     await server.connect(new StdioServerTransport());
     return 0;
