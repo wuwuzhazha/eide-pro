@@ -110,6 +110,13 @@ incident record is dropped when memory fades.
     Incident: a member's model quota ran out mid-card; the four items already
     committed one by one were kept intact, nothing was lost.
 
+13. Nobody edits a working tree while another agent is delivering from it.
+    A counter-proof or experiment that needs a temporary source edit runs in
+    its own `git worktree`, or waits until the delivery is committed.
+    Incident: the PM reversed `$sp` to `$msp` in the shared checkout to prove a
+    test while a member was committing; the member's commit `024d17c` carried
+    the temporary edit, was pushed, and turned CI red until `1b069a5`.
+
 ## Checks
 
 Dispatch: `npm run check:task-card -- <card.md>` — validates the card's
