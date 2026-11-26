@@ -1150,6 +1150,33 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
                     const percent = total > 0 ? `${(received * 100 / total).toFixed(1)}% of ` : '';
                     progress.report({ message: `${percent}'${tmpFile.name}'` });
                 });
+                /* binaries/<ver> releases carry .sha256 sidecars since 13.0.0;
+                   verification is mandatory for those, and the check is skipped
+                   only for older payloads that predate the sidecar files. */
+                const requiresChecksum = utility.compareVersion(binVersion, '13.0.0') >= 0;
+                let checksumVerified = false;
+                let checksumErrorMessage: string | undefined;
+                try {
+                    const checksumText = await fetchHttpsText(`${downloadUrl}.sha256`);
+                    const verification = verifyFileSha256(fs.readFileSync(tmpFile.path), checksumText, tmpFile.name);
+                    if (verification.status === 'match') {
+                        checksumVerified = true;
+                    } else if (verification.status === 'mismatch') {
+                        checksumErrorMessage = `SHA-256 mismatch: expected ${verification.expected}, got ${verification.actual}`;
+                    } else {
+                        checksumErrorMessage = 'checksum file has no usable digest';
+                    }
+                } catch (checksumError) {
+                    checksumErrorMessage = `checksum download failed: ${checksumError instanceof Error ? checksumError.message : checksumError}`;
+                }
+                if (!checksumVerified) {
+                    if (requiresChecksum) {
+                        GlobalEvent.log_error(`eide binaries integrity check failed: ${checksumErrorMessage}`);
+                        fs.rmSync(tmpFile.path, { force: true });
+                        return false;
+                    }
+                    GlobalEvent.log_info(`eide binaries ${binVersion} predates checksum sidecars; integrity check skipped`);
+                }
                 return true;
             } catch (error) {
                 GlobalEvent.emit('msg', ExceptionToMessage(error, 'Warning'));

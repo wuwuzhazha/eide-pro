@@ -13,6 +13,7 @@ All notable version changes will be recorded in this file.
 
 **Fixes**:
   - The tooling download rejects truncated transfers (received bytes must match the response `Content-Length`), so a dropped connection can no longer produce a silently partial tarball.
+  - The runtime binaries download verifies its `.sha256` sidecar for payloads versioned 13.0.0 or newer; a checksum mismatch or an unusable checksum fails the install instead of unpacking a corrupted payload.
 
 ### [v4.3.1]
 
