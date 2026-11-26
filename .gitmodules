@@ -1,3 +1,6 @@
 [submodule "lib/node-utility"]
 	path = lib/node-utility
 	url = git@github.com:github0null/node-utility.git
+[submodule "lib/eide_tools"]
+	path = lib/eide_tools
+	url = https://github.com/wuwuzhazha/eide_tools.git

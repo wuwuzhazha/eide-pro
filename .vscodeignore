@@ -47,7 +47,7 @@ node_modules/**
 
 # ignore unused files
 AGENTS.md
-lib/node-utility
+lib
 bin
 bin/builder/*.xml
 bin/builder/*.exe.config

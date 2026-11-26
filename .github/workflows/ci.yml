@@ -31,11 +31,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
       - name: Build extension and headless bundles
         run: npm run vscode:prepublish
 
       - name: Run tests
         run: npm test
+
+      - name: Build eide_tools from source
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            windows-latest) rid=win-x64 ;;
+            ubuntu-latest) rid=linux-x64 ;;
+            macos-latest) rid=osx-arm64 ;;
+          esac
+          echo "runner=$(uname -s) $(uname -m) rid=$rid"
+          node scripts/build-eide-tools.js --rid "$rid"
 
       - name: Verify build artifacts
         shell: bash
