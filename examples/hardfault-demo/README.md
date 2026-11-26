@@ -52,9 +52,11 @@ static void poll(const Sensor *sensor)
    reasons:         FORCED, INVSTATE
    faultLocation:   address 0 (no symbol)       <- 程序被跳到了地址 0
    callerLocation:  poll, main.c:15             <- sensor->on_event();  要修的就是这一行
+   backtrace:       poll  main.c:15
+                    main  main.c:21             <- poll(&sensors[i]);  是谁调用了它
    ```
 
-`callerLocation` 取的是压栈 LR-1，也就是**发起坏跳转的那条调用指令所在行**；`faultLocation` 是被跳进去的坏地址，通常不是要改的地方。
+`callerLocation` 取的是压栈 LR-1，也就是**发起坏跳转的那条调用指令所在行**；`faultLocation` 是被跳进去的坏地址，通常不是要改的地方。`backtrace` 从这个调用点继续往上展开，告诉你整条调用链。展开时调试器的 SP/PC/LR 会被临时改写，返回前恢复。
 
 ## 它为什么可信
 
