@@ -59,6 +59,9 @@ function normalizedLine(value: unknown): string | undefined {
 }
 
 function commandExists(command: string): boolean {
+    if (NodePath.isAbsolute(command)) {
+        return fs.existsSync(command);
+    }
     const result = spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], {
         encoding: 'utf8'
     });
@@ -112,12 +115,73 @@ function stopProcess(child: any): Promise<void> {
     });
 }
 
-async function run(): Promise<void> {
+const FAULT_STARTUP_SOURCE = [
+    'typedef unsigned int u32;',
+    'extern u32 _estack;',
+    'extern u32 _sidata;',
+    'extern u32 _sdata;',
+    'extern u32 _edata;',
+    'extern u32 _sbss;',
+    'extern u32 _ebss;',
+    'extern int main(void);',
+    'void Reset_Handler(void);',
+    'void HardFault_Handler(void);',
+    '',
+    '__attribute__((section(".isr_vector"), used))',
+    'void (* const g_vectors[])(void) = {',
+    '    (void (*)(void))&_estack,',
+    '    Reset_Handler,',
+    '    HardFault_Handler,',
+    '    HardFault_Handler',
+    '};',
+    '',
+    'void Reset_Handler(void)',
+    '{',
+    '    u32 *source = &_sidata;',
+    '    u32 *destination = &_sdata;',
+    '    while (destination < &_edata) { *destination++ = *source++; }',
+    '    for (destination = &_sbss; destination < &_ebss;) { *destination++ = 0; }',
+    '    main();',
+    '    for (;;) {}',
+    '}',
+    '',
+    '__attribute__((naked)) void HardFault_Handler(void)',
+    '{',
+    '    __asm volatile ("bkpt #0\\n\\tb .\\n");',
+    '}',
+    ''
+].join('\n');
+
+function faultMainSource(): { source: string; badCallLine: number } {
+    const lines = [
+        'extern void trap_line(void);',
+        '',
+        'void trap_line(void) {}',
+        '',
+        'int main(void)',
+        '{',
+        '    void (*bad)(void) = (void (*)(void))((unsigned int)&trap_line & ~1u);',
+        '    bad();',
+        '    for (;;) {}',
+        '}',
+        ''
+    ];
+    return { source: lines.join('\n'), badCallLine: lines.findIndex(line => line.trim() === 'bad();') + 1 };
+}
+
+async function prepareQemuSession(sources: { main: string; startup?: string }): Promise<{
+    root: string;
+    project: string;
+    qemuProcess: any;
+    target: string;
+    call: (tool: string, args?: Record<string, unknown>) => Promise<any>;
+}> {
     const repoRoot = process.cwd();
     const root = fs.mkdtempSync(NodePath.join(os.tmpdir(), 'eide-debug-qemu-'));
     const project = NodePath.join(root, 'project');
     const fixture = NodePath.join(repoRoot, 'test', 'e2e', 'fixtures', 'cortex-m3');
     const mainSource = NodePath.join(project, 'src', 'main.c');
+    const startupSource = NodePath.join(project, 'src', 'startup.c');
     const distCli = NodePath.join(repoRoot, 'dist', 'eide_cli.js');
     const resourcesDir = NodePath.join(repoRoot, 'res');
     if (!fs.existsSync(fixture)) {
@@ -131,19 +195,10 @@ async function run(): Promise<void> {
         console.error(`FAIL: QEMU breakpoint source not found at ${mainSource}`);
         process.exit(1);
     }
-    write(mainSource, [
-        'volatile unsigned int counter;',
-        '',
-        'int main(void)',
-        '{',
-        '    volatile int local_counter = 7;',
-        '    for (;;) {',
-        '        local_counter++;',
-        '        counter++;',
-        '    }',
-        '}',
-        ''
-    ].join('\n'));
+    write(mainSource, sources.main);
+    if (sources.startup !== undefined) {
+        write(startupSource, sources.startup);
+    }
     console.log(`OK: QEMU fixture prepared from ${fixture}`);
 
     const qemu = process.env.QEMU_SYSTEM_ARM || 'qemu-system-arm';
@@ -165,49 +220,65 @@ async function run(): Promise<void> {
         skipped(`ARM GCC not found at ${gcc}.`);
     }
 
-    let qemuProcess: any;
+    const build = spawnSync(process.execPath, [
+        distCli,
+        'build', '--project', project, '--toolchain-path', toolchainRoot,
+        '--timeout', '120000'
+    ], { encoding: 'utf8' });
+    assert(build.status === 0, `qemu fixture builds\n${build.stderr}`);
+    const buildResult = JSON.parse(build.stdout);
+    const elf = (buildResult.artifacts || []).find((file: string) => file.endsWith('.elf'));
+    assert(typeof elf === 'string' && fs.existsSync(elf), 'qemu fixture produces an ELF');
+
+    const port = await freePort();
+    const target = `127.0.0.1:${port}`;
+    const qemuArgs = ['-M', QEMU_MACHINE, '-kernel', elf, '-gdb', `tcp:${target}`, ...QEMU_ARGS];
+    assert(qemuArgs.includes('-S'), 'qemu: target is halted until the debugger resumes it');
+    console.log(`QEMU_ARGS=${JSON.stringify(qemuArgs)}`);
+    const qemuProcess = spawn(qemu, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    qemuProcess.stderr.resume();
+    await waitForPort(port, 5000);
+
+    const execute = createHeadlessToolExecutor({
+        projectPaths: [project],
+        resourcesDir,
+        extensionRoot: repoRoot,
+        toolchainPath: toolchainRoot,
+        buildTimeoutMs: 5000,
+        flashTimeoutMs: 5000,
+        runner: { run: async () => ({ code: 0, stdout: '', stderr: '' }) },
+        gdbPath: gdb,
+        debugCommandTimeoutMs: 10000,
+        debugStopTimeoutMs: 10000
+    });
+    const uid = 'headless-e2e';
+    const call = (tool: string, args: Record<string, unknown> = {}) => execute(tool, { uid, ...args });
+    return { root, project, qemuProcess, target, call };
+}
+
+async function run(): Promise<void> {
+    let session = await prepareQemuSession({
+        main: [
+        'volatile unsigned int counter;',
+        '',
+        'int main(void)',
+        '{',
+        '    volatile int local_counter = 7;',
+        '    for (;;) {',
+        '        local_counter++;',
+        '        counter++;',
+        '    }',
+        '}',
+        ''
+        ].join('\n')
+    });
+    const root = session.root;
+    const project = session.project;
+    let qemuProcess: any = session.qemuProcess;
     try {
-        const build = spawnSync(process.execPath, [
-            distCli,
-            'build', '--project', project, '--toolchain-path', toolchainRoot,
-            '--timeout', '120000'
-        ], { encoding: 'utf8' });
-        assert(build.status === 0, `qemu fixture builds\n${build.stderr}`);
-        const buildResult = JSON.parse(build.stdout);
-        const elf = (buildResult.artifacts || []).find((file: string) => file.endsWith('.elf'));
-        assert(typeof elf === 'string' && fs.existsSync(elf), 'qemu fixture produces an ELF');
+        const call = session.call;
 
-        const port = await freePort();
-        const target = `127.0.0.1:${port}`;
-        const qemuArgs = [
-            '-M', QEMU_MACHINE,
-            '-kernel', elf,
-            '-gdb', `tcp:${target}`,
-            ...QEMU_ARGS
-        ];
-        assert(qemuArgs.includes('-S'), 'qemu: target is halted until the debugger resumes it');
-        console.log(`QEMU_ARGS=${JSON.stringify(qemuArgs)}`);
-        qemuProcess = spawn(qemu, qemuArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-        qemuProcess.stderr.resume();
-        await waitForPort(port, 5000);
-
-        const execute = createHeadlessToolExecutor({
-            projectPaths: [project],
-            resourcesDir,
-            extensionRoot: repoRoot,
-            toolchainPath: toolchainRoot,
-            buildTimeoutMs: 5000,
-            flashTimeoutMs: 5000,
-            runner: { run: async () => ({ code: 0, stdout: '', stderr: '' }) },
-            gdbPath: gdb,
-            debugCommandTimeoutMs: 10000,
-            debugStopTimeoutMs: 10000
-        });
-        const uid = 'headless-e2e';
-        const call = (tool: string, args: Record<string, unknown> = {}) =>
-            execute(tool, { uid, ...args });
-
-        let result = await call('eide_debug_connect', { target, mode: 'extended-remote' });
+        let result = await call('eide_debug_connect', { target: session.target, mode: 'extended-remote' });
         assert(result.isError !== true && parse(result).success === true, 'qemu: debug connect');
 
         const haltedPc = await call('eide_debug_read_register', { name: 'pc' });
@@ -318,6 +389,49 @@ async function run(): Promise<void> {
         result = await call('eide_debug_disconnect');
         assert(result.isError !== true && parse(result).success === true, 'qemu: debug disconnect');
         console.log('QEMU DEBUG SESSION RAN');
+        await stopProcess(qemuProcess);
+        qemuProcess = undefined;
+        fs.rmSync(root, { recursive: true, force: true });
+
+        const faultMain = faultMainSource();
+        session = await prepareQemuSession({ main: faultMain.source, startup: FAULT_STARTUP_SOURCE });
+        try {
+            const faultCall = session.call;
+            const connectResult = await faultCall('eide_debug_connect', {
+                target: session.target, mode: 'extended-remote'
+            });
+            assert(connectResult.isError !== true && parse(connectResult).success === true,
+                'qemu fault: debug connect');
+            const breakpoint = parse(await faultCall('eide_debug_set_breakpoint', {
+                location: 'HardFault_Handler', hardware: false
+            }));
+            assert(typeof breakpoint.address === 'number', 'qemu fault: breakpoint at HardFault_Handler');
+            const stoppedResult = await faultCall('eide_debug_continue', { stopTimeoutMs: 10000 });
+            const stopped = parse(stoppedResult);
+            assert(stoppedResult.isError !== true && stopped.class === 'stopped',
+                'qemu fault: continue stops in HardFault_Handler');
+            const faultResult = await faultCall('eide_debug_fault', {});
+            const report = parse(faultResult);
+            const codes = Array.isArray(report.reasons)
+                ? report.reasons.map((reason: any) => reason.code) : [];
+            console.log(`EVIDENCE fault-reasons=${JSON.stringify(report.reasons)}`);
+            console.log(`EVIDENCE fault-exception=${JSON.stringify(report.exception)}`);
+            assert(codes.includes('FORCED') && codes.includes('INVSTATE'),
+                'qemu fault: reports FORCED and INVSTATE');
+            assert(report.exception?.stack === 'MSP', 'qemu fault: fault frame uses MSP');
+            assert(report.exception?.faultLocation?.functionName === 'trap_line',
+                'qemu fault: fault location is trap_line');
+            assert(report.exception?.callerLocation?.functionName === 'main'
+                && String(report.exception?.callerLocation?.file).endsWith('main.c'),
+            'qemu fault: caller location is main');
+            assert(Number(report.exception?.callerLocation?.line) === faultMain.badCallLine,
+                'qemu fault: caller location is the bad(); call line');
+            await faultCall('eide_debug_disconnect');
+            console.log('QEMU FAULT DIAGNOSIS RAN');
+        } finally {
+            await stopProcess(session.qemuProcess);
+            fs.rmSync(session.root, { recursive: true, force: true });
+        }
         console.log('All QEMU GDB/MI session tests passed.');
     } finally {
         await stopProcess(qemuProcess);

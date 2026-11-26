@@ -177,6 +177,7 @@ jobs:
           npx tsc -p ./ && npx tsc -p test
           node out/tmp/test/scripts/debug-qemu-session.test.js | tee "$RUNNER_TEMP/qemu-debug.log"
           grep -q 'QEMU DEBUG SESSION RAN' "$RUNNER_TEMP/qemu-debug.log"
+          grep -q 'QEMU FAULT DIAGNOSIS RAN' "$RUNNER_TEMP/qemu-debug.log"
 
       - name: Run Keil import end-to-end test
         timeout-minutes: 10
