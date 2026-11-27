@@ -6,6 +6,10 @@ All notable version changes will be recorded in this file.
 
 ***
 
+### [v4.3.6]
+
+- Fixed fresh installs and **EIDE: Reinstall binaries** rejecting valid runtime downloads. SHA-256 verification now uses the published asset name rather than the local temporary filename.
+
 ### [v4.3.5]
 
 - Renamed the product to **EIDE AI**. Open VSX keeps `wuwuzhazha.eide-pro` for in-place upgrades. The Microsoft Marketplace package uses `wuwuzhazha.eide-ai`. CLI command names and EIDE project files are unchanged.

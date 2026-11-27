@@ -37,8 +37,8 @@
     ],
     "homepage": "https://github.com/wuwuzhazha/eide-pro",
     "license": "MIT",
-    "description": "EIDE AI: embedded IDE with headless CLI/MCP for 8051/STM8/Cortex-M/MIPS/RISC-V",
-    "version": "4.3.5",
+    "description": "Build, flash, and debug firmware in VS Code. Let your AI agent pinpoint Cortex-M HardFaults with source lines and call stacks via standalone MCP.",
+    "version": "4.3.6",
     "preview": false,
     "engines": {
         "vscode": "^1.89.0"
