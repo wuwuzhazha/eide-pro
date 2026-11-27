@@ -36,7 +36,7 @@ import { File } from '../lib/node-utility/File';
 import { ResManager } from './ResManager';
 import { GlobalEvent } from './GlobalEvents';
 import { AbstractProject, CheckError, DataChangeType, VirtualSource, SourceFileOptions, EIDE_FILE_OPTION_VERSION } from './EIDEProject';
-import { EXTENSION_DISPLAY_NAME, EXTENSION_ID } from './ExtensionInfo';
+import { EXTENSION_DISPLAY_NAME } from './ExtensionInfo';
 import { ToolchainName, ToolchainManager } from './ToolchainManager';
 import {
     BuilderOptions,
@@ -3329,7 +3329,7 @@ export class ProjectExplorer implements CustomConfigurationProvider {
 
     name: string = EXTENSION_DISPLAY_NAME;
 
-    extensionId: string = EXTENSION_ID;
+    get extensionId(): string { return ResManager.instance().getAppFullName(); }
 
     private isRegisteredCpptoolsProvider: boolean = false;
 

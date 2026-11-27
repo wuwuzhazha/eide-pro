@@ -42,7 +42,6 @@ import { ExceptionToMessage, newMessage } from './Message';
 import { SevenZipper } from './Compress';
 import { ResManager } from './ResManager';
 import * as platform from './Platform';
-import { EXTENSION_ID } from './ExtensionInfo';
 import { ExternalUtilToolIndexDef } from './WebInterface/WebInterface';
 import { ExeCmd } from '../lib/node-utility/Executable';
 
@@ -576,7 +575,7 @@ export class ResInstaller {
                 .showWarningMessage(msg, txt_jump2settings)
                 .then((item) => {
                     if (item) {
-                        SettingManager.jumpToSettings(setting_name || `@ext:${EXTENSION_ID}`);
+                        SettingManager.jumpToSettings(setting_name || `@ext:${ResManager.instance().getAppFullName()}`);
                     }
                 });
             return false;

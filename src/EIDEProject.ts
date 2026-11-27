@@ -87,7 +87,7 @@ import { EventData, CurrentDevice, ArmBaseCompileConfigModel, ArmBaseCompileData
 import { acquireProjectLock, releaseProjectLock } from './core/project_lock';
 import { CompilerCommandsDatabaseItem, CodeBuilder } from './CodeBuilder';
 import { xpackRequireDevTools } from './XpackDevTools';
-import { EXTENSION_DISPLAY_NAME, EXTENSION_ID, LEGACY_EXTENSION_IDS } from './ExtensionInfo';
+import { EXTENSION_DISPLAY_NAME, isEideExtensionId } from './ExtensionInfo';
 
 export class CheckError extends Error {
 }
@@ -880,7 +880,7 @@ export abstract class AbstractProject implements CustomConfigurationProvider, Pr
     //-----------------------------------------------------------
 
     name: string = EXTENSION_DISPLAY_NAME;
-    extensionId: string = EXTENSION_ID;
+    get extensionId(): string { return ResManager.instance().getAppFullName(); }
     abstract canProvideConfiguration(uri: vscode.Uri, token?: vscode.CancellationToken | undefined): Thenable<boolean>;
     abstract provideConfigurations(uris: vscode.Uri[], token?: vscode.CancellationToken | undefined): Thenable<SourceFileConfigurationItem[]>;
     abstract canProvideBrowseConfiguration(token?: vscode.CancellationToken | undefined): Thenable<boolean>;
@@ -4081,7 +4081,7 @@ class EIDEProject extends AbstractProject {
             }
 
             if (settings['C_Cpp.default.configurationProvider'] === undefined
-                || LEGACY_EXTENSION_IDS.includes(settings['C_Cpp.default.configurationProvider'])) {
+                || isEideExtensionId(settings['C_Cpp.default.configurationProvider'])) {
                 settings['C_Cpp.default.configurationProvider'] = this.extensionId;
             }
 
@@ -4199,7 +4199,7 @@ class EIDEProject extends AbstractProject {
             // add extension recommendation
             {
                 let recommendExt: string[] = [
-                    EXTENSION_ID,
+                    this.extensionId,
                     "keroc.hex-fmt",
                     "xiaoyongdong.srecord",
                     "hars.cppsnippets",
@@ -4290,7 +4290,7 @@ class EIDEProject extends AbstractProject {
                             const idx = cfg['configurations'].findIndex((item) => item['name'] == os.platform());
                             if (idx != -1) {
                                 const provider = cfg['configurations'][idx].configurationProvider;
-                                if (provider == this.extensionId || LEGACY_EXTENSION_IDS.includes(provider)) {
+                                if (isEideExtensionId(provider)) {
                                     fs.unlinkSync(cfgFile.path);
                                 }
                             }
@@ -4350,7 +4350,6 @@ class EIDEProject extends AbstractProject {
     ////////////////////////////////// cpptools intellisence provider ///////////////////////////////////
 
     name: string = EXTENSION_DISPLAY_NAME;
-    extensionId: string = EXTENSION_ID;
 
     // virtual source path list (!! must be real absolute path !!)
     //      key: fsPath
