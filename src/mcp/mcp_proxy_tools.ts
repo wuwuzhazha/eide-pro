@@ -45,7 +45,7 @@ export function createMcpServer(
 
     const server = new McpServer(
         {
-            name: 'EIDE Pro',
+            name: 'EIDE AI',
             version: options.version,
             websiteUrl: 'https://github.com/wuwuzhazha/eide-pro'
         },

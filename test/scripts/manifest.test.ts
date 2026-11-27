@@ -30,10 +30,13 @@ assert(duplicateIds.length === 0, `command ids are unique (duplicates: ${duplica
 const untitled = pkg.contributes.commands.filter((command: any) => !command.title);
 assert(untitled.length === 0, `every command has a title (missing: ${untitled.map((c: any) => c.command).join(', ') || 'none'})`);
 
-const { EXTENSION_ID, EXTENSION_DISPLAY_NAME } =
+const { EXTENSION_ID, EXTENSION_DISPLAY_NAME, MARKETPLACE_EXTENSION_ID, isEideExtensionId } =
     require('../../../src/ExtensionInfo') as any;
 assert(`${pkg.publisher}.${pkg.name}` === EXTENSION_ID,
     `package identity matches extension id '${EXTENSION_ID}'`);
+assert([EXTENSION_ID, MARKETPLACE_EXTENSION_ID, 'cl.eide'].every(isEideExtensionId)
+    && !isEideExtensionId('ms-vscode.cmake-tools') && !isEideExtensionId(undefined),
+    'C/C++ provider migration recognizes only EIDE extension IDs');
 assert(pkg.displayName === EXTENSION_DISPLAY_NAME,
     `display name matches '${EXTENSION_DISPLAY_NAME}'`);
 assert(lock.version === pkg.version && lock.packages?.['']?.version === pkg.version,

@@ -1,9 +1,9 @@
 {
     "name": "eide-pro",
-    "displayName": "EIDE Pro",
+    "displayName": "EIDE AI",
     "publisher": "wuwuzhazha",
     "author": {
-        "name": "EIDE Pro contributors",
+        "name": "EIDE AI contributors",
         "url": "https://github.com/wuwuzhazha/eide-pro"
     },
     "keywords": [
@@ -37,8 +37,8 @@
     ],
     "homepage": "https://github.com/wuwuzhazha/eide-pro",
     "license": "MIT",
-    "description": "EIDE Pro: embedded IDE with headless CLI/MCP for 8051/STM8/Cortex-M/MIPS/RISC-V",
-    "version": "4.3.4",
+    "description": "EIDE AI: embedded IDE with headless CLI/MCP for 8051/STM8/Cortex-M/MIPS/RISC-V",
+    "version": "4.3.5",
     "preview": false,
     "engines": {
         "vscode": "^1.89.0"
@@ -199,7 +199,7 @@
         ],
         "configuration": [
             {
-                "title": "EIDE Pro",
+                "title": "EIDE AI",
                 "properties": {
                     "EIDE.MCP.Server.Enable": {
                         "type": "boolean",

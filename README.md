@@ -1,8 +1,8 @@
-# EIDE Pro
+# EIDE AI
 
-<img src="./res/icon/icon.png" width="96" align="right" alt="EIDE Pro icon">
+<img src="./res/icon/icon.png" width="96" align="right" alt="EIDE AI icon">
 
-EIDE Pro is an embedded MCU development environment for VS Code and for
+EIDE AI is an embedded MCU development environment for VS Code and for
 headless automation. It manages EIDE projects for ARM Cortex-M, 8051/STM8,
 RISC-V, MIPS, and arbitrary GCC targets; builds them with their native
 toolchains; flashes devices through supported uploaders; and exposes the same
@@ -15,7 +15,7 @@ project and build model through a CLI and MCP server.
 
 [简体中文](./README_ZH-CN.md)
 
-![Agent driving EIDE Pro over MCP](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
+![Agent driving EIDE AI over MCP](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
 
 ## Overview
 
@@ -67,16 +67,14 @@ Cortex-M projects.
 
 ## Install
 
-### Open VSX
+### Extension marketplaces
 
 ```bash
 code --install-extension wuwuzhazha.eide-pro
 ```
 
-The extension is published as **EIDE Pro** on
-[Open VSX](https://open-vsx.org/extension/wuwuzhazha/eide-pro). Use this command
-in an editor configured for Open VSX, such as VSCodium or code-server. Stock VS
-Code does not query Open VSX by default; use the VSIX below instead.
+- **VS Code:** install [EIDE AI from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=wuwuzhazha.eide-ai) (`wuwuzhazha.eide-ai`).
+- **VSCodium or code-server:** use the command above with [Open VSX](https://open-vsx.org/extension/wuwuzhazha/eide-pro). The Open VSX ID is unchanged, so existing installations update in place.
 
 ### GitHub Releases
 
@@ -133,8 +131,8 @@ bundles.
 
 ## Quick start
 
-1. Install EIDE Pro.
-2. Install a supported toolchain and set its path in the EIDE Pro
+1. Install EIDE AI.
+2. Install a supported toolchain and set its path in the EIDE AI
    **Operations** view, or follow the startup walkthrough
    (Get Started → Setup Toolchain) that offers the same step.
 3. Create a project from a template, or import an existing Keil, IAR, or
@@ -196,12 +194,12 @@ looking up SVD symbols (including `derivedFrom` inheritance).
 VS Code also exposes an HTTP MCP server. Enable it with
 `EIDE.MCP.Server.Enable` and set the port with `EIDE.MCP.Server.Port` (default
 `8940`). Client configuration uses an entry name of your choosing; the server
-itself identifies as `EIDE Pro`:
+itself identifies as `EIDE AI`:
 
 ```json
 {
   "servers": {
-    "EIDE Pro": { "url": "http://localhost:8940/mcp", "type": "http" }
+    "EIDE AI": { "url": "http://localhost:8940/mcp", "type": "http" }
   }
 }
 ```
@@ -218,7 +216,7 @@ For agent installation and setup, see the
 - **VS Code** — version 1.89 or newer, or a compatible editor that can install
   from Open VSX or a VSIX file.
 - **Toolchain** — install the compiler, assembler, and linker for your target
-  separately, then configure its path in EIDE Pro. Headless mode accepts
+  separately, then configure its path in EIDE AI. Headless mode accepts
   `--toolchain-path` or a `--settings` file.
 - **Node.js** — Node.js 18 or newer for the headless CLI, MCP server, and
   builds from source.
@@ -229,16 +227,16 @@ For agent installation and setup, see the
 
 ## Upstream relationship
 
-EIDE Pro is an unofficial fork of
+EIDE AI is an unofficial fork of
 [github0null/eide](https://github.com/github0null/eide), maintained at
 [wuwuzhazha/eide-pro](https://github.com/wuwuzhazha/eide-pro). All changes in this
 fork were executed with AI and touch core project-loading and build paths;
 submitting them upstream would impose a disproportionate review and stability
-burden on the upstream maintainers. EIDE Pro is therefore maintained as an
+burden on the upstream maintainers. EIDE AI is therefore maintained as an
 independent reference implementation and installable extension. Upstream
 remains [github0null/eide](https://github.com/github0null/eide).
 
-EIDE Pro uses the same `.eide/eide.yml` project model and toolchain definitions
+EIDE AI uses the same `.eide/eide.yml` project model and toolchain definitions
 as upstream, and it has its own extension identity, so it installs separately
 from upstream EIDE.
 
@@ -303,7 +301,7 @@ Questions, bug reports and field notes are welcome in the QQ group
 <details>
 <summary>Support the project</summary>
 
-EIDE Pro is MIT-licensed and stays free. If it saves you time, you can help
+EIDE AI is MIT-licensed and stays free. If it saves you time, you can help
 cover the maintenance work. The upstream EIDE project by github0null has its own
 [sponsor page](https://github.com/github0null/eide).
 

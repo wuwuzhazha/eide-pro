@@ -1,8 +1,8 @@
-# EIDE Pro
+# EIDE AI
 
-<img src="./res/icon/icon.png" width="96" align="right" alt="EIDE Pro 图标">
+<img src="./res/icon/icon.png" width="96" align="right" alt="EIDE AI 图标">
 
-EIDE Pro 是面向 VS Code 和 Headless 自动化的嵌入式 MCU 开发环境。它管理面向
+EIDE AI 是面向 VS Code 和 Headless 自动化的嵌入式 MCU 开发环境。它管理面向
 ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程；使用目标
 平台的原生工具链构建工程；通过受支持的烧录器烧录设备；并通过 CLI 和 MCP 服务器
 对外提供与扩展相同的工程模型和构建模型。
@@ -14,7 +14,7 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
 
 [English](./README.md)
 
-![AI agent 通过 MCP 驱动 EIDE Pro](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
+![AI agent 通过 MCP 驱动 EIDE AI](https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/headless-demo.gif)
 
 ## 概述
 
@@ -58,16 +58,14 @@ ARM Cortex-M、8051/STM8、RISC-V、MIPS 以及任意 GCC 目标的 EIDE 工程�
 
 ## 安装
 
-### Open VSX
+### 扩展市场
 
 ```bash
 code --install-extension wuwuzhazha.eide-pro
 ```
 
-扩展以 **EIDE Pro** 名称发布在
-[Open VSX](https://open-vsx.org/extension/wuwuzhazha/eide-pro)。请在配置了
-Open VSX 的编辑器（例如 VSCodium 或 code-server）中执行该命令。标准 VS Code
-默认不查询 Open VSX；请改用下方的 VSIX。
+- **VS Code：** 在[微软 Marketplace](https://marketplace.visualstudio.com/items?itemName=wuwuzhazha.eide-ai)安装 EIDE AI（`wuwuzhazha.eide-ai`）。
+- **VSCodium 或 code-server：** 使用上面的命令从 [Open VSX](https://open-vsx.org/extension/wuwuzhazha/eide-pro) 安装。Open VSX 扩展 ID 不变，原有安装可直接升级。
 
 ### GitHub Releases
 
@@ -119,8 +117,8 @@ npx @vscode/vsce@2.15.0 package
 
 ## 快速开始
 
-1. 安装 EIDE Pro。
-2. 安装受支持的工具链，并在 EIDE Pro 的 **Operations** 视图中设置其路径；
+1. 安装 EIDE AI。
+2. 安装受支持的工具链，并在 EIDE AI 的 **Operations** 视图中设置其路径；
    也可以按首次启动的引导提示操作（Get Started → 设置编译器路径），两者是同一步。
 3. 从模板创建工程，或导入已有的 Keil、IAR 或 Eclipse 工程。
 4. 构建工程，然后在工程视图中烧录设备或启动调试会话。
@@ -170,12 +168,12 @@ stdio 服务器提供工程 build/rebuild、clean、flash、目标/源码/头文
 
 VS Code 还提供 HTTP MCP 服务器。通过 `EIDE.MCP.Server.Enable` 启用，并通过
 `EIDE.MCP.Server.Port` 设置端口（默认 `8940`）。客户端配置里的条目名可以自行决定，
-服务端自身标识为 `EIDE Pro`：
+服务端自身标识为 `EIDE AI`：
 
 ```json
 {
   "servers": {
-    "EIDE Pro": { "url": "http://localhost:8940/mcp", "type": "http" }
+    "EIDE AI": { "url": "http://localhost:8940/mcp", "type": "http" }
   }
 }
 ```
@@ -190,7 +188,7 @@ Agent 安装与配置见 [EIDE MCP skill](./docs/skills/README.md)。skill 目�
 
 - **VS Code** — 1.89 或更新版本，或兼容的、可从 Open VSX 或 VSIX 文件安装扩展的
   编辑器。
-- **工具链** — 单独安装目标平台所需的编译器、汇编器和链接器，然后在 EIDE Pro 中
+- **工具链** — 单独安装目标平台所需的编译器、汇编器和链接器，然后在 EIDE AI 中
   配置其路径。Headless 模式接受 `--toolchain-path` 或 `--settings` 文件。
 - **Node.js** — Headless CLI、MCP 服务器以及从源码构建需要 Node.js 18 或更新
   版本。
@@ -201,14 +199,14 @@ Agent 安装与配置见 [EIDE MCP skill](./docs/skills/README.md)。skill 目�
 
 ## 与上游的关系
 
-EIDE Pro 是 [github0null/eide](https://github.com/github0null/eide) 的非官方分支，
+EIDE AI 是 [github0null/eide](https://github.com/github0null/eide) 的非官方分支，
 由 [wuwuzhazha/eide-pro](https://github.com/wuwuzhazha/eide-pro) 维护。本分支的所有
 改动均由 AI 执行，并且涉及工程加载和构建核心链路；将这些改动提交上游会给上游
-维护者带来不成比例的审查和稳定性负担。因此，EIDE Pro 作为独立的参考实现和可安装
+维护者带来不成比例的审查和稳定性负担。因此，EIDE AI 作为独立的参考实现和可安装
 扩展维护。上游仍然是
 [github0null/eide](https://github.com/github0null/eide)。
 
-EIDE Pro 使用与上游相同的 `.eide/eide.yml` 工程模型和工具链定义，并拥有独立的
+EIDE AI 使用与上游相同的 `.eide/eide.yml` 工程模型和工具链定义，并拥有独立的
 扩展标识，因此与上游 EIDE 分开安装。
 
 ## 项目结构
@@ -268,7 +266,7 @@ npm run test:headless-package  # 安装 tgz、构建 Cortex-M fixture 并验证 
 <details>
 <summary>支持这个项目</summary>
 
-EIDE Pro 采用 MIT 许可证，功能持续免费。如果它帮你省了时间，欢迎请作者喝杯咖啡，
+EIDE AI 采用 MIT 许可证，功能持续免费。如果它帮你省了时间，欢迎请作者喝杯咖啡，
 用来覆盖维护成本。上游 EIDE 项目（github0null）有它自己的[赞助页](https://github.com/github0null/eide)。
 
 <img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/wechat-pay.png" width="200" alt="微信支付"> <img src="https://raw.githubusercontent.com/wuwuzhazha/eide-pro/dev/docs/media/community/alipay.png" width="200" alt="支付宝">

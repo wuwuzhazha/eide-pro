@@ -67,7 +67,7 @@ function writePackageJson(root, staging) {
     const headless = {
         name: PACKAGE_NAME,
         version: source.version,
-        description: 'Headless CLI and MCP server for EIDE Pro embedded projects',
+        description: 'Headless CLI and MCP server for EIDE AI embedded projects',
         license: source.license,
         author: source.author,
         homepage: source.homepage,

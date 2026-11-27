@@ -70,7 +70,6 @@ import { WorkspaceManager } from './WorkspaceManager';
 import { VirtualDocument } from './VirtualDocsProvider';
 import * as utility from './utility';
 import * as platform from './Platform';
-import { EXTENSION_ID } from './ExtensionInfo';
 import { cleanupStaleStaging, installBinaries } from './core/binaries_install';
 import { downloadHttpsFile, fetchHttpsText } from './core/https_download';
 import { commandProbeInvocation, probeCommand, probeProcessOutput } from './core/command_probe';
@@ -385,7 +384,7 @@ export async function activate(context: vscode.ExtensionContext) {
     RegisterGlobalEvent();
     RegisterMsgListener();
 
-    GlobalEvent.log_info('EIDE Pro launch begin');
+    GlobalEvent.log_info('EIDE AI launch begin');
 
     // init platform
     try {
@@ -497,7 +496,7 @@ export async function activate(context: vscode.ExtensionContext) {
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.Import', () => operationExplorer.OnImportProject()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.SetToolchainPath', () => operationExplorer.OnSetToolchainPath()));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.SetupUtilTools', () => operationExplorer.setupUtilTools()));
-    subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.openSettings', () => SettingManager.jumpToSettings(`@ext:${EXTENSION_ID}`)));
+    subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.openSettings', () => SettingManager.jumpToSettings(`@ext:${context.extension.id}`)));
     subscriptions.push(vscode.commands.registerCommand('_cl.eide.Operation.onlineHelp', () => utility.openUrl('https://github.com/wuwuzhazha/eide-pro/issues')));
 
     // operations user cmds
@@ -678,7 +677,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // launch done
     GlobalEvent.emit('extension_launch_done');
-    GlobalEvent.log_info('EIDE Pro launch done');
+    GlobalEvent.log_info('EIDE AI launch done');
 
     startToolingPrompt(context);
 }
@@ -909,7 +908,7 @@ function checkBinFolder(binFolder: File): boolean {
 function logLegacyPythonRuntime(binFolder: File) {
     const legacyDir = File.from(binFolder.path, 'python36');
     if (legacyDir.IsDir()) {
-        GlobalEvent.log_info(`python36 is no longer used by EIDE Pro: ${legacyDir.path}`);
+        GlobalEvent.log_info(`python36 is no longer used by EIDE AI: ${legacyDir.path}`);
     }
 }
 

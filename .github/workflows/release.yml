@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing GitHub release tag to publish to VS Code Marketplace
+        description: Version to publish from dev (for example v4.3.5)
         required: true
         type: string
 
@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish release
-    if: github.event_name == 'push'
+    name: Build release packages
+    if: github.event_name == 'push' || github.ref_name == github.event.repository.default_branch
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -36,19 +36,22 @@ jobs:
           node-version: 18
           cache: npm
 
-      - name: Validate tag version
+      - name: Validate release version
         id: version
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${RELEASE_TAG#v}"
           package_version="$(node -p "require('./package.json').version")"
-          if [ "$tag_version" != "$package_version" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${package_version}"
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$tag_version" != "$package_version" ]]; then
+            echo "::error::Expected release tag v${package_version} for this source revision."
             exit 1
           fi
           echo "version=${package_version}" >> "$GITHUB_OUTPUT"
 
       - name: Require Open VSX token
+        if: github.event_name == 'push'
         shell: bash
         env:
           OPEN_VSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
@@ -90,14 +93,17 @@ jobs:
         run: npm run verify:vsix
 
       - name: Package headless distribution
+        if: github.event_name == 'push'
         run: npm run package:headless
 
       - name: Package VSIX
+        if: github.event_name == 'push'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: npx --yes @vscode/vsce@2.15.0 package --out "eide-pro-${VERSION}.vsix"
 
       - name: Verify VSIX contents
+        if: github.event_name == 'push'
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -111,6 +117,7 @@ jobs:
           fi
 
       - name: Package MCP skill archive
+        if: github.event_name == 'push'
         shell: bash
         run: |
           cd docs/skills
@@ -122,6 +129,7 @@ jobs:
           fi
 
       - name: Write SHA-256 checksums for every release asset
+        if: github.event_name == 'push'
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -140,9 +148,10 @@ jobs:
           ls -la ./*.sha256
 
       - name: Create or update GitHub Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          name: EIDE Pro ${{ steps.version.outputs.version }}
+          name: EIDE AI ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
             eide-pro-${{ steps.version.outputs.version }}.vsix
@@ -156,17 +165,40 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to Open VSX
+        if: github.event_name == 'push'
         env:
           OPEN_VSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
           VSIX_FILE: eide-pro-${{ steps.version.outputs.version }}.vsix
         run: npx --yes ovsx@1.4.0 publish "$VSIX_FILE" --pat "$OPEN_VSX_PAT"
 
+      - name: Package Marketplace VSIX
+        if: github.event_name == 'workflow_dispatch' || vars.VS_MARKETPLACE_ENABLED == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          backup="$RUNNER_TEMP/eide-package.json"
+          cp package.json "$backup"
+          trap 'cp "$backup" package.json' EXIT
+          npm pkg set name=eide-ai
+          mkdir -p "$RUNNER_TEMP/marketplace"
+          npx --yes @vscode/vsce@2.15.0 package --out "$RUNNER_TEMP/marketplace/eide-ai-$VERSION.vsix"
+
+      - name: Transfer Marketplace VSIX to the publishing job
+        if: github.event_name == 'workflow_dispatch' || vars.VS_MARKETPLACE_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-vsix
+          path: ${{ runner.temp }}/marketplace/eide-ai-${{ steps.version.outputs.version }}.vsix
+          if-no-files-found: error
+
   vscode-marketplace:
     name: Publish to VS Code Marketplace
     needs: release
     if: >-
-      ${{ !cancelled() && github.repository == 'wuwuzhazha/eide-pro' && (
-        (github.event_name == 'push' && needs.release.result == 'success' && vars.VS_MARKETPLACE_ENABLED == 'true') ||
+      ${{ github.repository == 'wuwuzhazha/eide-pro' && (
+        (github.event_name == 'push' && vars.VS_MARKETPLACE_ENABLED == 'true') ||
         (github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch)
       ) }}
     runs-on: ubuntu-latest
@@ -182,37 +214,32 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
-      - name: Download and verify the released VSIX
+      - name: Download Marketplace VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: marketplace-vsix
+          path: ${{ runner.temp }}/marketplace
+
+      - name: Verify Marketplace VSIX
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Expected a release tag in the form vMAJOR.MINOR.PATCH."
-            exit 1
-          fi
           version="${RELEASE_TAG#v}"
-          vsix="eide-pro-${version}.vsix"
-          assets="$RUNNER_TEMP/marketplace-assets"
-          mkdir -p "$assets"
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$assets" \
-            --pattern "$vsix" --pattern "$vsix.sha256"
-          cd "$assets"
-          read -r expected filename < "$vsix.sha256"
-          actual="$(sha256sum "$vsix")"
-          if [[ "$filename" != "$vsix" || ! "$expected" =~ ^[0-9a-f]{64}$ || "${actual%% *}" != "$expected" ]]; then
-            echo "::error::VSIX SHA-256 verification failed."
-            exit 1
-          fi
+          vsix="$RUNNER_TEMP/marketplace/eide-ai-$version.vsix"
           unzip -p "$vsix" extension/package.json | node -e '
-            const manifest = JSON.parse(require("fs").readFileSync(0, "utf8"));
-            if (manifest.publisher !== "wuwuzhazha" || manifest.name !== "eide-pro" || manifest.version !== process.argv[1]) {
+            const pkg = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            if (pkg.publisher !== "wuwuzhazha" || pkg.name !== "eide-ai" || pkg.displayName !== "EIDE AI" || pkg.version !== process.argv[1]) {
               throw new Error("VSIX identity or version does not match the expected Marketplace release");
             }
           ' "$version"
-          echo "VSIX_PATH=$assets/$vsix" >> "$GITHUB_ENV"
+          entries="$(unzip -Z1 "$vsix")"
+          if grep -E '^extension/(artifacts|coverage|out|src|test|scripts)/' <<< "$entries"; then
+            echo "::error::Marketplace VSIX contains development or packaging output."
+            exit 1
+          fi
+          echo "VSIX_PATH=$vsix" >> "$GITHUB_ENV"
 
       - name: Publish the verified VSIX using Trusted Publishing
         run: npx --yes @vscode/vsce@4.1.1 publish --oidc --packagePath "$VSIX_PATH"

@@ -72,12 +72,12 @@ async function run(): Promise<void> {
         await client.connect(transport);
         const handshake = client.getServerVersion();
         const expectedVersion = JSON.parse(fs.readFileSync(NodePath.join(process.cwd(), 'package.json'), 'utf8')).version;
-        assert(handshake?.name === 'EIDE Pro', `protocol: server name is EIDE Pro (${JSON.stringify(handshake)})`);
+        assert(handshake?.name === 'EIDE AI', `protocol: server name is EIDE AI (${JSON.stringify(handshake)})`);
         assert(handshake?.version === expectedVersion,
             `protocol: server version matches package.json (${JSON.stringify(handshake)})`);
         assert(handshake?.icons === undefined, `protocol: server declares no icons (${JSON.stringify(handshake)})`);
         assert(handshake?.websiteUrl === 'https://github.com/wuwuzhazha/eide-pro',
-            `protocol: server website points to EIDE Pro (${JSON.stringify(handshake)})`);
+            `protocol: server website points to EIDE AI (${JSON.stringify(handshake)})`);
 
         const tools = await client.listTools();
         assert(tools.tools.length === 43, 'protocol: exposes 43 tools');

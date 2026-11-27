@@ -1,17 +1,17 @@
 ---
 name: eide-mcp-tools
-version: 4.3.4
+version: 4.3.5
 description: >-
-  Operate EIDE Pro embedded MCU projects through MCP tools: build, rebuild,
+  Operate EIDE AI embedded MCU projects through MCP tools: build, rebuild,
   clean, flash, project configuration, stack usage, callgraph, and GDB
-  debugging. Use whenever the user mentions EIDE Pro, EIDE MCP, eide-mcp,
+  debugging. Use whenever the user mentions EIDE AI, EIDE MCP, eide-mcp,
   headless firmware builds, MCU build/flash/debug automation, or the MCP
   endpoint at localhost:8940 — even if they do not explicitly say "MCP".
 ---
 
-# EIDE Pro MCP Tools
+# EIDE AI MCP Tools
 
-The `version` in the frontmatter is the EIDE Pro release this skill describes.
+The `version` in the frontmatter is the EIDE AI release this skill describes.
 Compare it with `eide-mcp --version` (or the extension version in VS Code): if
 they differ, the copy you are reading is stale — refresh it with
 `eide-mcp --print-skill > <path-to-this-file>`.

@@ -804,8 +804,8 @@ export const view_str$prompt$project_is_opened_by_another = [
 ][langIndex];
 
 export const view_str$prompt$feedback = [
-    `已经过去了一段时间，EIDE Pro 这款插件有帮到你吗？欢迎在 GitHub 上反馈问题或提出建议！`,
-    `A few days passed, has EIDE Pro helped you ? Please report issues or share feedback on GitHub !`
+    `已经过去了一段时间，EIDE AI 这款插件有帮到你吗？欢迎在 GitHub 上反馈问题或提出建议！`,
+    `A few days passed, has EIDE AI helped you ? Please report issues or share feedback on GitHub !`
 ][langIndex];
 
 //---------------Select string------------------
@@ -1110,8 +1110,8 @@ export const close_project = [
 //-------------Tooling install prompt-------------
 
 export const view_str$prompt$tooling_intro = [
-    'EIDE Pro 的 `eide-cli` / `eide-mcp` 是给脚本和 AI 用的独立工具，推荐安装。',
-    'EIDE Pro ships `eide-cli` / `eide-mcp` as a separate package for scripts and AI agents. Installing them is recommended.'
+    'EIDE AI 的 `eide-cli` / `eide-mcp` 是给脚本和 AI 用的独立工具，推荐安装。',
+    'EIDE AI ships `eide-cli` / `eide-mcp` as a separate package for scripts and AI agents. Installing them is recommended.'
 ][langIndex];
 
 export const view_str$prompt$tooling_missing_prereqs = [
