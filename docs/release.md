@@ -17,6 +17,39 @@ Release.
 The release workflow checks `OPEN_VSX_PAT` before installing dependencies and
 fails at the `Require Open VSX token` step when the secret is missing.
 
+## Enable VS Code Marketplace publishing
+
+GitHub Actions uses [Marketplace Trusted Publishing](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#publish-with-github-actions-and-trusted-publishing).
+It does not need a Marketplace PAT or Azure secret.
+
+1. In GitHub, configure the `vscode-marketplace` environment to allow
+   deployments only from branch `dev` and version tags matching `v*`.
+2. Sign in to [Marketplace publisher management](https://marketplace.visualstudio.com/manage)
+   with an account that can publish as `wuwuzhazha`. Under this publisher,
+   select **Trusted Publishing → Create** and set:
+
+   | Field | Value |
+   | --- | --- |
+   | Policy name | EIDE Pro Release |
+   | Repository owner | `wuwuzhazha` |
+   | Repository | `eide-pro` |
+   | Workflow | `release.yml` |
+   | Environment | `vscode-marketplace` |
+
+3. To publish an existing release, go to **Actions → Release → Run workflow**,
+   select `dev`, and enter a tag such as `v4.3.4`. This runs only the Marketplace
+   job. It downloads the original VSIX, verifies its SHA-256 and extension
+   identity, and publishes it without rebuilding or contacting Open VSX.
+4. After this succeeds, set the repository Actions variable
+   `VS_MARKETPLACE_ENABLED` to `true`. Future version tags will then publish
+   to Marketplace after the existing GitHub Release and Open VSX job succeeds.
+   Leave the variable unset to keep tag releases unchanged.
+
+Verify publication at
+<https://marketplace.visualstudio.com/items?itemName=wuwuzhazha.eide-pro>.
+An existing Marketplace version cannot be replaced; use a new release version
+if the VSIX needs to change.
+
 ## Cut a release
 
 1. Bump the version in `package.json` and the root version in
@@ -48,6 +81,8 @@ The tag push starts `.github/workflows/release.yml`.
     `<skills>/eide-mcp-tools/SKILL.md`.
 - The same VSIX published to Open VSX under the `wuwuzhazha` publisher:
   https://open-vsx.org/extension/wuwuzhazha/eide-pro
+- Once enabled, the same VSIX published to Visual Studio Marketplace:
+  https://marketplace.visualstudio.com/items?itemName=wuwuzhazha.eide-pro
 
 ## Binaries payloads
 

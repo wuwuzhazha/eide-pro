@@ -4,13 +4,22 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag to publish to VS Code Marketplace
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     name: Build and publish release
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout full history
@@ -151,3 +160,59 @@ jobs:
           OPEN_VSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
           VSIX_FILE: eide-pro-${{ steps.version.outputs.version }}.vsix
         run: npx --yes ovsx@1.4.0 publish "$VSIX_FILE" --pat "$OPEN_VSX_PAT"
+
+  vscode-marketplace:
+    name: Publish to VS Code Marketplace
+    needs: release
+    if: >-
+      ${{ !cancelled() && github.repository == 'wuwuzhazha/eide-pro' && (
+        (github.event_name == 'push' && needs.release.result == 'success' && vars.VS_MARKETPLACE_ENABLED == 'true') ||
+        (github.event_name == 'workflow_dispatch' && github.ref_name == github.event.repository.default_branch)
+      ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: vscode-marketplace
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup Node.js 22 for Marketplace tooling
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Download and verify the released VSIX
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a release tag in the form vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          vsix="eide-pro-${version}.vsix"
+          assets="$RUNNER_TEMP/marketplace-assets"
+          mkdir -p "$assets"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$assets" \
+            --pattern "$vsix" --pattern "$vsix.sha256"
+          cd "$assets"
+          read -r expected filename < "$vsix.sha256"
+          actual="$(sha256sum "$vsix")"
+          if [[ "$filename" != "$vsix" || ! "$expected" =~ ^[0-9a-f]{64}$ || "${actual%% *}" != "$expected" ]]; then
+            echo "::error::VSIX SHA-256 verification failed."
+            exit 1
+          fi
+          unzip -p "$vsix" extension/package.json | node -e '
+            const manifest = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            if (manifest.publisher !== "wuwuzhazha" || manifest.name !== "eide-pro" || manifest.version !== process.argv[1]) {
+              throw new Error("VSIX identity or version does not match the expected Marketplace release");
+            }
+          ' "$version"
+          echo "VSIX_PATH=$assets/$vsix" >> "$GITHUB_ENV"
+
+      - name: Publish the verified VSIX using Trusted Publishing
+        run: npx --yes @vscode/vsce@4.1.1 publish --oidc --packagePath "$VSIX_PATH"
