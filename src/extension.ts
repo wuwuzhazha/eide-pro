@@ -1056,12 +1056,10 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
 
     cleanupStaleStaging(NodePath.dirname(binFolder.path));
 
-    // zip type
     const binType = BINARIES_ASSET_EXT;
-
-    // release asset of this repository: releases/download/binaries/<version>/bin-<runtimeId>.7z
+    const assetName = `bin-${platform.getRuntimeId()}.${binType}`;
     const downloadUrl = utility.redirectHost(
-        `https://github.com/${BINARIES_RELEASE_REPO}/releases/download/${BINARIES_RELEASE_TAG_PREFIX}${binVersion}/bin-${platform.getRuntimeId()}.${binType}`);
+        `https://github.com/${BINARIES_RELEASE_REPO}/releases/download/${BINARIES_RELEASE_TAG_PREFIX}${binVersion}/${assetName}`);
 
     let installedDone = false;
 
@@ -1087,7 +1085,7 @@ async function tryInstallBinaries(binFolder: File, binVersion: string): Promise<
                 let checksumErrorMessage: string | undefined;
                 try {
                     const checksumText = await fetchHttpsText(`${downloadUrl}.sha256`);
-                    const verification = verifyFileSha256(fs.readFileSync(tmpFile.path), checksumText, tmpFile.name);
+                    const verification = verifyFileSha256(fs.readFileSync(tmpFile.path), checksumText, assetName);
                     if (verification.status === 'match') {
                         checksumVerified = true;
                     } else if (verification.status === 'mismatch') {
